@@ -135,3 +135,27 @@ Stage Summary:
 - Form: Nama/Divisi · Durasi (jam, koma desimal OK) · Apa yang dilatih · Catatan · Foto. API & skema TIDAK berubah (durationMenit int).
 - Kontrak API tetap: GET/POST /api/logs, PATCH/DELETE /api/logs/[id].
 - Ide kandidat ronde berikutnya: manifest PWA ringan + ikon hanko, tanggal backdate (link kecil "ubah tanggal"), ekspor ringkasan sebagai gambar.
+
+---
+Task ID: cron-review-4
+Agent: main (Z.ai Code, webDevReview cron)
+Task: QA rutin + pengembangan lanjutan (desain Jepang minimalis terkunci).
+
+Work Log:
+- QA awal: server hidup, DB bersih, lint bersih, halaman render tanpa error console — desain Jepang stabil.
+- Fitur baru — BACKDATE (ubah tanggal):
+  - API: POST /api/logs kini menerima field opsional `date` (YYYY-MM-DD, regex + validitas kalender via parseLocalDate, ditolak jika masa depan: "Tanggal tidak boleh di masa depan."). Diuji curl: kemarin → 201, besok → 400, 2026-02-31 → 400.
+  - UI: baris kecil "Tanggal: hari ini · ubah" di atas field form; klik ubah → native date input (max hari ini) + link "selesai". Kicker kanji dinamis: 今日の稽古 (hari ini) / 昨日の稽古 (kemarin) / 過去の稽古 (lebih lama); h1 ikut berubah "Catat latihan 25 September". Setelah kirim, reset ke hari ini.
+- Fitur baru — PWA:
+  - Ikon hanko 稽古 (vermillion #B8492F, kanji washi-white via IPAGothic + sharp/librsvg) dibuat oleh scripts/gen-icon.mjs: icon-192/512, icon-maskable-512 (full-bleed), apple-touch-icon 180.
+  - public/manifest.webmanifest (nama 稽古日誌, standalone, bg/theme #f6f2e7) + metadata manifest/icons/appleWebApp di layout.tsx. Terverifikasi: /manifest.webmanifest 200, <link rel="manifest"> & apple-touch-icon ada di HTML.
+- Detail styling: label hari relatif diperluas — "Hari ini", "Kemarin", "2–6 hari lalu", lalu fallback tanggal singkat.
+- Bug ditemukan & diperbaiki: handleCreated meng-prepend entri baru tanpa sort → entri backdate muncul di urutan salah sampai reload. Kini disisipkan terurut (date desc, createdAt desc) — terverifikasi: entri 24 Sep muncul di antara 25 & 23 Sep tanpa reload.
+- Catatan tooling: agent-browser `fill` tidak mengubah nilai native <input type=date> (keterbatasan tool, bukan bug aplikasi) — diuji via native value setter + dispatch input/change events; wiring React onChange terbukti bekerja.
+- Verifikasi E2E: backdate UI flow (kemarin & 3 hari lalu) → grouping pekan benar ("21–27 Sep"), label relatif benar, ringkasan/bulan/pekan ter-update; console bersih; lint 0 masalah; data tes dihapus (DB & uploads kosong).
+
+Stage Summary:
+- API: POST /api/logs sekarang menerima `date` opsional (masa lalu/hari ini); kontrak lain tetap.
+- Fitur aktif: catat hari ini/backdate (form + kanji kicker dinamis), feed bulan→pekan terurut benar, salin ringkasan, ubah inline, hapus dua-langkah, PWA installable (ikon hanko 稽古), label hari relatif.
+- Prinsip desain tetap terkunci: washi/sumi/shu, Zen fonts, .font-kanji, hairline borders, link teks kecil lowercase — tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
+- Ide kandidat ronde berikutnya: service worker offline ringan (opsional), halaman/komponen statistik per orang yang sangat kecil (jika diminta user), meta OG image hanko.

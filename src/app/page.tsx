@@ -53,7 +53,17 @@ export default function Page() {
   }, [refresh]);
 
   const handleCreated = useCallback((log: PracticeLog) => {
-    setLogs((prev) => [log, ...prev]);
+    setLogs((prev) => {
+      // Insert in feed order (date desc, createdAt desc) so backdated
+      // entries land in the right place instead of always on top.
+      const next = [...prev, log];
+      next.sort((a, b) => {
+        const byDate = b.date.localeCompare(a.date);
+        if (byDate !== 0) return byDate;
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+      return next;
+    });
     setJustAddedId(log.id);
     window.setTimeout(() => {
       setJustAddedId((current) => (current === log.id ? null : current));
@@ -245,6 +255,9 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
   const [title, setTitle] = useState("");
   const [durationHours, setDurationHours] = useState("");
   const [notes, setNotes] = useState("");
+  const [dateValue, setDateValue] = useState(""); // "" = today
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [todayKey, setTodayKey] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -255,7 +268,22 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
   useEffect(() => {
     const saved = window.localStorage.getItem(ACTOR_NAME_STORAGE_KEY);
     if (saved) setActorName(saved);
+    setTodayKey(toDateKey(new Date()));
   }, []);
+
+  const isToday = !dateValue || (todayKey !== "" && dateValue === todayKey);
+  const isYesterday =
+    !isToday &&
+    todayKey !== "" &&
+    dateValue === toDateKey(new Date(Date.now() - 86400000));
+
+  const pickedDateLabel =
+    dateValue && !isToday
+      ? new Date(`${dateValue}T00:00:00`).toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "long",
+        })
+      : "hari ini";
 
   const pickPhoto = (file: File | null) => {
     if (photoPreview) URL.revokeObjectURL(photoPreview);
@@ -268,6 +296,8 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
     setTitle("");
     setDurationHours("");
     setNotes("");
+    setDateValue("");
+    setShowDatePicker(false);
     pickPhoto(null);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -293,6 +323,7 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
       fd.set("title", title.trim());
       fd.set("durationMin", String(minutes));
       fd.set("notes", notes.trim());
+      if (!isToday && dateValue) fd.set("date", dateValue);
 
       let file: File | null = photo;
       if (file) {
@@ -333,13 +364,52 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
       className="pb-8 pt-10"
       noValidate
     >
-      <p aria-hidden className="font-kanji text-xs tracking-[0.35em] text-seal">
-        今日の稽古
+      <p
+        aria-hidden
+        className="font-kanji text-xs tracking-[0.35em] text-seal"
+      >
+        {isToday ? "今日の稽古" : isYesterday ? "昨日の稽古" : "過去の稽古"}
       </p>
-      <h1 className="mt-2 font-serif text-2xl tracking-tight">Catat latihan hari ini</h1>
+      <h1 className="mt-2 font-serif text-2xl tracking-tight">
+        {isToday ? "Catat latihan hari ini" : `Catat latihan ${pickedDateLabel}`}
+      </h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Isi detilnya, tambahkan foto kalau ada, lalu kirim.
       </p>
+
+      {/* Date row — quiet by default, backdate on demand */}
+      <div className="mt-4 min-h-9">
+        {showDatePicker ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="date"
+              value={dateValue}
+              max={todayKey || undefined}
+              onChange={(e) => setDateValue(e.target.value)}
+              aria-label="Tanggal latihan"
+              className="h-9 rounded-[3px] border border-foreground/15 bg-card/70 px-2 text-sm tabular-nums shadow-none outline-none transition-colors focus:border-seal"
+            />
+            <button
+              type="button"
+              onClick={() => setShowDatePicker(false)}
+              className={textLink}
+            >
+              selesai
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Tanggal: {pickedDateLabel} ·{" "}
+            <button
+              type="button"
+              onClick={() => setShowDatePicker(true)}
+              className={textLink}
+            >
+              ubah
+            </button>
+          </p>
+        )}
+      </div>
 
       <div className="mt-6 space-y-5">
         <div className="grid gap-5 sm:grid-cols-2">
@@ -468,9 +538,11 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
 function relativeDayLabel(day: string): string | null {
   const today = toDateKey(new Date());
   if (day === today) return "Hari ini";
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (day === toDateKey(yesterday)) return "Kemarin";
+  const target = new Date(`${day}T00:00:00`).getTime();
+  const now = new Date(`${today}T00:00:00`).getTime();
+  const diffDays = Math.round((now - target) / 86400000);
+  if (diffDays === 1) return "Kemarin";
+  if (diffDays >= 2 && diffDays <= 6) return `${diffDays} hari lalu`;
   return null;
 }
 

@@ -35,7 +35,25 @@ const logSchema = z.object({
       .max(1440, "Durasi maksimal 1440 menit (24 jam).")
   ),
   notes: z.string().max(2000, "Catatan maksimal 2000 karakter.").default(""),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal tidak valid.")
+    .optional(),
 });
+
+/** Parse "YYYY-MM-DD" into a local-midnight Date; null if the calendar date is invalid. */
+function parseLocalDate(key: string): Date | null {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(y, (m ?? 1) - 1, d ?? 1);
+  if (
+    date.getFullYear() !== y ||
+    date.getMonth() !== (m ?? 1) - 1 ||
+    date.getDate() !== d
+  ) {
+    return null;
+  }
+  return date;
+}
 
 function getString(form: FormData, key: string): string | null {
   const value = form.get(key);
@@ -73,6 +91,7 @@ export async function POST(req: Request) {
     title: getString(form, "title") ?? "",
     durationMin: getString(form, "durationMin") ?? "",
     notes: getString(form, "notes") ?? "",
+    date: getString(form, "date") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -81,11 +100,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const { actorName, title, durationMin, notes } = parsed.data;
+  const { actorName, title, durationMin, notes, date: dateInput } = parsed.data;
 
-  // Date is always "today" (local midnight).
+  // Date defaults to "today" (local midnight); a past date may be supplied.
   const now = new Date();
-  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (dateInput) {
+    const parsedDate = parseLocalDate(dateInput);
+    if (!parsedDate) {
+      return NextResponse.json(
+        { error: "Tanggal tidak valid." },
+        { status: 400 }
+      );
+    }
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (parsedDate.getTime() > today.getTime()) {
+      return NextResponse.json(
+        { error: "Tanggal tidak boleh di masa depan." },
+        { status: 400 }
+      );
+    }
+    date = parsedDate;
+  }
 
   // --- Optional image handling ---
   let imagePath: string | null = null;

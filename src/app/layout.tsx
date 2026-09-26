@@ -28,6 +28,19 @@ export const metadata: Metadata = {
   title: "稽古日誌 — Log Latihan Teater",
   description:
     "Catat latihan teater hari ini — durasi, catatan, dan foto. Tampil rapi per pekan dan per bulan.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "稽古日誌",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({
