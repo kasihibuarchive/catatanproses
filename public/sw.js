@@ -1,17 +1,17 @@
-/* 稽古日誌 — offline fallback service worker.
+/* 地蔵日誌 — offline fallback service worker.
    Intercepts document navigations only: network first, then a washi-styled
    fallback page when the app cannot be reached. API calls and assets stay
    network-only so data is never served stale (dev/HMR safe). */
 
-const CACHE = "kekiro-offline-v1";
-const OFFLINE_KEY = "/__kekiro-offline";
+const CACHE = "jizo-offline-v1";
+const OFFLINE_KEY = "/__jizo-offline";
 
 const OFFLINE_HTML = `<!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Offline — 稽古日誌</title>
+<title>Offline — 地蔵日誌</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -48,7 +48,7 @@ const OFFLINE_HTML = `<!doctype html>
 </head>
 <body>
   <main class="card">
-    <div class="seal" aria-hidden="true"><span>稽</span><span>古</span></div>
+    <div class="seal" aria-hidden="true"><span>地</span><span>蔵</span></div>
     <p class="kanji" aria-hidden="true">休息中</p>
     <h1>Kamu sedang offline</h1>
     <div class="rule" aria-hidden="true"></div>

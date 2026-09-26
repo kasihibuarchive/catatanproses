@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import path from "path";
 
-// Hanko seal icon: vermillion square, stacked 稽古 in washi white.
+// Hanko seal icon: vermillion square, stacked 地蔵 in washi white.
 // Regular icons (rounded) + maskable (full-bleed, glyph inside 80% safe zone).
 const FONT = "IPAGothic";
 const INK = "#B8492F";
@@ -17,8 +17,8 @@ function svg(size, { rounded, scale }) {
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
   <rect width="${size}" height="${size}" rx="${r}" fill="${INK}"/>
-  <text x="${size / 2}" y="${center1 + baseline}" font-family="${FONT}" font-size="${glyph}" fill="${PAPER}" text-anchor="middle">稽</text>
-  <text x="${size / 2}" y="${center2 + baseline}" font-family="${FONT}" font-size="${glyph}" fill="${PAPER}" text-anchor="middle">古</text>
+  <text x="${size / 2}" y="${center1 + baseline}" font-family="${FONT}" font-size="${glyph}" fill="${PAPER}" text-anchor="middle">地</text>
+  <text x="${size / 2}" y="${center2 + baseline}" font-family="${FONT}" font-size="${glyph}" fill="${PAPER}" text-anchor="middle">蔵</text>
 </svg>`;
 }
 

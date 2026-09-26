@@ -27,7 +27,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL("http://localhost:3000"),
-  title: "稽古日誌 — Log Latihan Teater",
+  title: "地蔵日誌 — Catatan Proses Jizo",
   description:
     "Catat latihan teater hari ini — durasi, catatan, dan foto. Tampil rapi per pekan dan per bulan.",
   manifest: "/manifest.webmanifest",
@@ -40,19 +40,19 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "稽古日誌",
+    title: "地蔵日誌",
     statusBarStyle: "default",
   },
   openGraph: {
-    title: "稽古日誌 — Log Latihan Teater",
+    title: "地蔵日誌 — Catatan Proses Jizo",
     description:
       "Catat latihan teater hari ini — durasi, catatan, dan foto. Tampil rapi per pekan dan per bulan.",
-    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "稽古日誌 — Log Latihan Teater" }],
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "地蔵日誌 — Catatan Proses Jizo" }],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "稽古日誌 — Log Latihan Teater",
+    title: "地蔵日誌 — Catatan Proses Jizo",
     description:
       "Catat latihan teater hari ini — durasi, catatan, dan foto. Tampil rapi per pekan dan per bulan.",
     images: ["/og-image.png"],

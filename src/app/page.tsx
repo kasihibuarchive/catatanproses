@@ -126,7 +126,7 @@ export default function Page() {
         aria-hidden
         className="font-kanji fixed right-6 top-1/2 hidden -translate-y-1/2 select-none text-sm tracking-[0.6em] text-foreground/15 lg:block [writing-mode:vertical-rl]"
       >
-        稽古日誌
+        地蔵日誌
       </p>
 
       {/* Header */}
@@ -137,13 +137,13 @@ export default function Page() {
               aria-hidden
               className="font-kanji flex size-9 flex-col items-center justify-center rounded-[3px] bg-seal text-[11px] leading-[1.2] text-[#f7f2e6] ring-1 ring-inset ring-white/25"
             >
-              <span>稽</span>
-              <span>古</span>
+              <span>地</span>
+              <span>蔵</span>
             </span>
             <div>
-              <p className="font-serif text-sm leading-tight tracking-wide">稽古日誌</p>
+              <p className="font-serif text-sm leading-tight tracking-wide">地蔵日誌</p>
               <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                Log Latihan Teater
+                Catatan Proses Jizo
               </p>
             </div>
           </div>
@@ -320,7 +320,7 @@ function DownloadMonthImage({ month }: { month: MonthGroup }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `kekiro-${month.key}.png`;
+      a.download = `catatanproses-${month.key}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -348,7 +348,7 @@ function DownloadMonthCsv({ month }: { month: MonthGroup }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `kekiro-${month.key}.csv`;
+    a.download = `catatanproses-${month.key}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();

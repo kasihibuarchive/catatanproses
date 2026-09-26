@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import path from "path";
 
-// OG share card (1200x630): washi paper, vermillion hanko seal 稽古,
+// OG share card (1200x630): washi paper, vermillion hanko seal 地蔵,
 // sumi ink title. Kanji via IPAGothic, latin via Liberation Sans.
 const W = 1200;
 const H = 630;
@@ -26,8 +26,8 @@ const svg = `
   <rect width="${W}" height="${H}" fill="${PAPER}"/>
 
   <!-- left content column -->
-  <text x="96" y="212" font-family="IPAGothic" font-size="104" fill="${INK}" letter-spacing="14">稽古日誌</text>
-  <text x="100" y="278" font-family="Liberation Sans" font-size="30" fill="${INK_SOFT}" letter-spacing="10">LOG LATIHAN TEATER</text>
+  <text x="96" y="212" font-family="IPAGothic" font-size="104" fill="${INK}" letter-spacing="14">地蔵日誌</text>
+  <text x="100" y="278" font-family="Liberation Sans" font-size="30" fill="${INK_SOFT}" letter-spacing="10">CATATAN PROSES JIZO</text>
 
   <rect x="100" y="326" width="440" height="2" fill="${SEAL}"/>
 
@@ -40,8 +40,8 @@ const svg = `
   <g>
     <rect x="850" y="150" width="290" height="330" rx="26" fill="${SEAL}"/>
     <rect x="866" y="166" width="258" height="298" rx="16" fill="none" stroke="${PAPER}" stroke-opacity="0.35" stroke-width="3"/>
-    <text x="995" y="272" font-family="IPAGothic" font-size="96" fill="${PAPER}" text-anchor="middle">稽</text>
-    <text x="995" y="404" font-family="IPAGothic" font-size="96" fill="${PAPER}" text-anchor="middle">古</text>
+    <text x="995" y="272" font-family="IPAGothic" font-size="96" fill="${PAPER}" text-anchor="middle">地</text>
+    <text x="995" y="404" font-family="IPAGothic" font-size="96" fill="${PAPER}" text-anchor="middle">蔵</text>
   </g>
 
   <!-- hairline bottom -->

@@ -175,7 +175,7 @@ export function buildMonthSummary(month: MonthGroup): string {
   const totalSessions = monthSessionCount(month);
   const actorCount = monthActorCount(month);
   const lines: string[] = [
-    `Log Latihan — ${month.label}`,
+    `Catatan Proses — ${month.label}`,
     `Total: ${totalSessions} sesi · ${formatDuration(month.totalMin)}${
       actorCount > 1 ? ` · ${actorCount} orang` : ""
     }`,

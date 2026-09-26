@@ -31,11 +31,11 @@ async function ensureFonts(mincho: string, gothic: string): Promise<void> {
   if (typeof document === "undefined" || !("fonts" in document)) return;
   try {
     await Promise.all([
-      document.fonts.load(`400 72px ${mincho}`, "稽古日誌月継続は力なり"),
-      document.fonts.load(`400 30px ${mincho}`, "稽古"),
+      document.fonts.load(`400 72px ${mincho}`, "地蔵日誌月継続は力なり"),
+      document.fonts.load(`400 30px ${mincho}`, "地蔵"),
       document.fonts.load(`700 40px ${gothic}`, "September 2026 0123456789"),
       document.fonts.load(`400 26px ${gothic}`, "sesi orang jam foto •—·"),
-      document.fonts.load(`500 22px ${gothic}`, "LOG LATIHAN TEATER"),
+      document.fonts.load(`500 22px ${gothic}`, "CATATAN PROSES JIZO"),
     ]);
     await document.fonts.ready;
   } catch {
@@ -164,7 +164,7 @@ export async function renderMonthSummaryBlob(month: MonthGroup): Promise<Blob> {
   ctx.textAlign = "left";
   ctx.fillStyle = ink;
   ctx.font = `400 72px ${mincho}`;
-  ctx.fillText("稽古日誌", MARGIN, TITLE_Y);
+  ctx.fillText("地蔵日誌", MARGIN, TITLE_Y);
 
   ctx.fillStyle = seal;
   ctx.font = `400 56px ${mincho}`;
@@ -176,7 +176,7 @@ export async function renderMonthSummaryBlob(month: MonthGroup): Promise<Blob> {
   ctx.fillStyle = muted;
   ctx.font = `500 22px ${gothic}`;
   if ("letterSpacing" in ctx) (ctx as SpacingCtx).letterSpacing = "10px";
-  ctx.fillText("LOG LATIHAN TEATER", MARGIN + 2, EYEBROW_Y);
+  ctx.fillText("CATATAN PROSES JIZO", MARGIN + 2, EYEBROW_Y);
   if ("letterSpacing" in ctx) (ctx as SpacingCtx).letterSpacing = "0px";
 
   // month label
@@ -260,8 +260,8 @@ export async function renderMonthSummaryBlob(month: MonthGroup): Promise<Blob> {
   ctx.fillStyle = bg;
   ctx.font = `400 30px ${mincho}`;
   ctx.textAlign = "center";
-  ctx.fillText("稽", 0, -6);
-  ctx.fillText("古", 0, 28);
+  ctx.fillText("地", 0, -6);
+  ctx.fillText("蔵", 0, 28);
   ctx.textAlign = "left";
   ctx.restore();
 

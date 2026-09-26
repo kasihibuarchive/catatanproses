@@ -1,6 +1,6 @@
 {
-  "name": "稽古日誌 — Log Latihan Teater",
-  "short_name": "稽古日誌",
+  "name": "地蔵日誌 — Catatan Proses Jizo",
+  "short_name": "地蔵日誌",
   "description": "Catat latihan teater hari ini — durasi, catatan, dan foto. Tampil rapi per pekan dan per bulan.",
   "start_url": "/",
   "display": "standalone",
