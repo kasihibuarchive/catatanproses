@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Zen_Kaku_Gothic_New, Zen_Old_Mincho } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { RegisterServiceWorker } from "@/components/register-sw";
 
 const zenGothic = Zen_Kaku_Gothic_New({
   variable: "--font-zen-gothic",
@@ -74,6 +75,7 @@ export default function RootLayout({
       >
         {children}
         <Toaster position="bottom-center" />
+        <RegisterServiceWorker />
       </body>
     </html>
   );

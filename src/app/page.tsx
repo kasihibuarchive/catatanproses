@@ -40,6 +40,19 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  const [online, setOnline] = useState(true);
+
+  // Live online/offline state for the quiet banner under the header.
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -140,6 +153,17 @@ export default function Page() {
           </p>
         </div>
       </header>
+
+      {!online && (
+        <div className="mx-auto w-full max-w-2xl px-5" role="status">
+          <p className="flex flex-wrap items-baseline gap-2 pt-3 text-xs text-muted-foreground">
+            <span aria-hidden className="font-kanji text-[11px] tracking-[0.25em] text-seal">
+              オフライン
+            </span>
+            kamu sedang offline — catatan baru belum bisa terkirim
+          </p>
+        </div>
+      )}
 
       <main id="konten-utama" tabIndex={-1} className="mx-auto w-full max-w-2xl flex-1 px-5 focus:outline-none">
         {/* Form */}
@@ -453,7 +477,13 @@ function LogForm({
       reset(true);
       toast.success("Latihan tercatat.");
     } catch (err) {
-      setFieldError(err instanceof Error ? err.message : "Gagal menyimpan. Coba lagi.");
+      setFieldError(
+        !navigator.onLine
+          ? "Kamu sedang offline. Sambungkan internet, lalu coba lagi."
+          : err instanceof Error
+            ? err.message
+            : "Gagal menyimpan. Coba lagi."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -615,7 +645,7 @@ function LogForm({
               <img
                 src={photoPreview}
                 alt="Pratinjau foto latihan"
-                className="size-12 rounded-[3px] border border-foreground/15 object-cover"
+                className="size-12 -rotate-[0.6deg] rounded-[2px] border border-foreground/15 bg-white object-cover p-0.5 shadow-[0_1px_4px_rgba(60,50,30,0.10)] motion-reduce:rotate-0"
               />
               <button
                 type="button"
@@ -642,7 +672,7 @@ function LogForm({
           disabled={submitting}
           aria-keyshortcuts="Meta+Enter Control+Enter"
           title="Pintasan: Ctrl/⌘ + Enter"
-          className="w-full tracking-wide sm:w-auto sm:min-w-36"
+          className="w-full tracking-wide active:translate-y-px sm:w-auto sm:min-w-36"
         >
           {submitting ? "Mengirim…" : "Kirim"}
         </Button>

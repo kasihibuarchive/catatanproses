@@ -258,3 +258,30 @@ Stage Summary:
 - Helper lib baru: parseLocalDate, sortFeedLogs, buildEntrySummary.
 - Fitur aktif kini: catat hari ini/backdate, pakai-lagi, feed bulan→pekan (re-sort instan saat edit tanggal), salin ringkasan bulan + WhatsApp + gambar PNG, salin per entri, ubah inline (termasuk tanggal), hapus dua-langkah, foto ala cetakan album, kanji hari, PWA hanko, OG card, skip link.
 - Ide kandidat ronde berikutnya: service worker offline ringan (satu-satunya kandidat besar tersisa); sisanya polish kecil — mis. judul halaman dinamis saat offline, atau tidy-up sebelum serah terima ke user.
+
+---
+Task ID: cron-review-9
+Agent: main (Z.ai Code, webDevReview cron)
+Task: QA rutin + pengembangan lanjutan (desain Jepang minimalis terkunci).
+
+Work Log:
+- QA awal: server hidup, DB bersih, lint bersih.
+- Fitur baru — SERVICE WORKER OFFLINE RINGAN (kandidat besar terakhir dari worklog):
+  - public/sw.js (vanilla, tanpa build step): HANYA intersep navigasi dokumen (request.mode === "navigate") — network-first, gagal → fallback page washi INLINE (tanpa route baru): bg #f6f2e7, hanko 稽古 vermillion miring -3°, kanji 休息中 shu letterspaced, heading mincho "Kamu sedang offline", double-rule, link "muat ulang". API & asset TIDAK di-cache (data tak pernah basi; aman HMR/dev).
+  - install: cache.put fallback + skipWaiting; activate: hapus cache versi lama + clients.claim.
+  - src/components/register-sw.tsx (baru): registrasi best-effort setelah window load, di-mount di layout body.
+  - E2E: SW terdaftar (scope /), halaman controlled; dev server di-MATIKAN → reload → fallback page tampil sempurna (terverifikasi visual + snapshot); server dihidupkan lagi → app kembali normal, SW tetap mengontrol.
+  - Catatan tooling: `agent-browser set offline on` TIDAK memengaruhi fetch di dalam SW (quirk CDP/Chromium — SW proses terpisah); pengujian akurat dilakukan dengan mematikan server. Under emulated offline, halaman tetap dirender SW-bypass tapi chunk JS gagal → shell SSR tanpa hydration (batasan dev-only, bukan bug).
+- Fitur baru — INDIKATOR OFFLINE IN-APP:
+  - Hook online/offline (window events) di Page; saat offline muncul baris tenang di bawah header: オフライン (kanji shu kecil) + "kamu sedang offline — catatan baru belum bisa terkirim" (role=status). Muncul/hilang live saat koneksi berubah — terverifikasi via emulasi offline tanpa reload.
+  - Submit saat offline kini memberi pesan ramah: "Kamu sedang offline. Sambungkan internet, lalu coba lagi." (bukan "Failed to fetch" mentah) — terverifikasi E2E; tak ada data terkirim (DB tetap 0).
+- Detail styling:
+  - Preview foto di form kini ala cetakan album yang sama dengan feed: frame putih hairline p-0.5, kemiringan -0,6°, bayangan kertas, motion-reduce:rotate-0.
+  - Tombol Kirim: active:translate-y-px (umpan balik taktil halus saat ditekan).
+- Verifikasi: lint 0 masalah; console bersih; DB 0 baris, uploads kosong; banner hilang saat online kembali; app pulih penuh setelah server restart.
+
+Stage Summary:
+- Tidak ada perubahan API/skema. Kontrak tetap.
+- File baru: public/sw.js, src/components/register-sw.tsx (di-mount layout).
+- Fitur aktif kini: catat hari ini/backdate, pakai-lagi, feed bulan→pekan re-sort instan, salin (bulan/WhatsApp/gambar PNG/per entri), ubah inline + re-date, hapus dua-langkah, foto ala cetakan album, kanji hari, PWA hanko + OG card, skip link, offline fallback SW + indikator offline live.
+- Peta fitur kini LENGKAP sesuai kandidat worklog — ronde berikutnya: hanya polish kecil/regresi; TIDAK ada lagi penambahan fitur besar agar app tetap minimalis (sesuai keinginan user "simpel dan minimalis").
