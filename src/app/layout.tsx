@@ -25,6 +25,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL("http://localhost:3000"),
   title: "稽古日誌 — Log Latihan Teater",
   description:
     "Catat latihan teater hari ini — durasi, catatan, dan foto. Tampil rapi per pekan dan per bulan.",

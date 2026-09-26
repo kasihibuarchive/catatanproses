@@ -126,7 +126,7 @@ export default function Page() {
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-5">
         {/* Form */}
-        <LogForm onCreated={handleCreated} />
+        <LogForm onCreated={handleCreated} lastLog={logs[0] ?? null} />
 
         {/* Summary */}
         {!loading && !error && logs.length > 0 && (
@@ -185,6 +185,8 @@ export default function Page() {
                       <p className="text-xs tabular-nums text-muted-foreground">
                         {formatDuration(month.totalMin)}
                       </p>
+                      <ShareMonthLink month={month} />
+                      <span aria-hidden className="text-foreground/20">·</span>
                       <CopyMonthButton month={month} />
                     </div>
                   </div>
@@ -215,11 +217,27 @@ export default function Page() {
 
       {/* Footer */}
       <footer className="mt-auto border-t border-foreground/10">
-        <div className="mx-auto w-full max-w-2xl px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
-          <p className="font-kanji text-sm tracking-[0.3em] text-foreground/70">継続は力なり</p>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            Keizoku wa chikara nari — konsistensi adalah kekuatan.
-          </p>
+        <div className="mx-auto flex w-full max-w-2xl items-start justify-between gap-4 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
+          <div>
+            <p className="font-kanji text-sm tracking-[0.3em] text-foreground/70">継続は力なり</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Keizoku wa chikara nari — konsistensi adalah kekuatan.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              window.scrollTo({
+                top: 0,
+                behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                  ? "auto"
+                  : "smooth",
+              })
+            }
+            className={`${textLink} shrink-0 pt-0.5`}
+          >
+            ↑ atas
+          </button>
         </div>
       </footer>
     </div>
@@ -227,6 +245,22 @@ export default function Page() {
 }
 
 /* ---------- Copy month summary ---------- */
+
+/** Quiet link that opens WhatsApp with the month recap pre-filled. */
+function ShareMonthLink({ month }: { month: MonthGroup }) {
+  const href = `https://wa.me/?text=${encodeURIComponent(buildMonthSummary(month))}`;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      title="Bagikan ringkasan bulan ini via WhatsApp"
+      className={textLink}
+    >
+      whatsapp
+    </a>
+  );
+}
 
 function CopyMonthButton({ month }: { month: MonthGroup }) {
   const [copied, setCopied] = useState(false);
@@ -259,7 +293,13 @@ const DURATION_CHIPS: { label: string; hours: number }[] = [
   { label: "3", hours: 3 },
 ];
 
-function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
+function LogForm({
+  onCreated,
+  lastLog,
+}: {
+  onCreated: (log: PracticeLog) => void;
+  lastLog: PracticeLog | null;
+}) {
   const [actorName, setActorName] = useState("");
   const [title, setTitle] = useState("");
   const [durationHours, setDurationHours] = useState("");
@@ -285,6 +325,15 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
     !isToday &&
     todayKey !== "" &&
     dateValue === toDateKey(new Date(Date.now() - 86400000));
+
+  // "Use last practice" is only useful while the form is still blank.
+  const canReuse = Boolean(lastLog) && !title && !durationHours && !notes;
+  const reuseLast = () => {
+    if (!lastLog) return;
+    setTitle(lastLog.title);
+    setDurationHours(minutesToHoursInput(lastLog.durationMin));
+    setNotes(lastLog.notes);
+  };
 
   const pickedDateLabel =
     dateValue && !isToday
@@ -385,6 +434,14 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
       <p className="mt-2 text-sm text-muted-foreground">
         Isi detilnya, tambahkan foto kalau ada, lalu kirim.
       </p>
+      {canReuse && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Latihan terakhir: “{lastLog?.title}” ·{" "}
+          <button type="button" onClick={reuseLast} className={textLink}>
+            pakai lagi
+          </button>
+        </p>
+      )}
 
       {/* Date row — quiet by default, backdate on demand */}
       <div className="mt-4 min-h-9">
@@ -452,6 +509,7 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
                   type="button"
                   onClick={() => setDurationHours(chip.label)}
                   aria-label={`Set durasi ${chip.label} jam`}
+                  aria-pressed={durationHours === chip.label}
                   className={`rounded px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
                     durationHours === chip.label ? "bg-foreground/5 text-foreground" : ""
                   }`}
@@ -731,12 +789,21 @@ function LogRow({
         <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">{log.notes}</p>
       )}
       {log.imagePath && (
-        <a href={log.imagePath} target="_blank" rel="noreferrer" className="mt-3 block">
+        <a
+          href={log.imagePath}
+          target="_blank"
+          rel="noreferrer"
+          className={`group mt-4 block ${
+            // Prints taped into a Showa photo album: a hairline white frame,
+            // the faintest tilt, straightening on hover.
+            log.id.charCodeAt(0) % 2 === 0 ? "-rotate-[0.4deg]" : "rotate-[0.4deg]"
+          } transition-transform hover:rotate-0 motion-reduce:rotate-0 motion-reduce:transition-none`}
+        >
           <img
             src={log.imagePath}
             alt={`Foto latihan ${log.title}`}
             loading="lazy"
-            className="max-h-80 w-full rounded-[3px] border border-foreground/10 object-cover transition-opacity hover:opacity-90"
+            className="w-full rounded-[2px] border border-foreground/15 bg-white p-1 shadow-[0_1px_4px_rgba(60,50,30,0.10)] transition-opacity hover:opacity-90"
           />
         </a>
       )}

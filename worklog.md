@@ -183,3 +183,27 @@ Stage Summary:
 - Aset publik baru: /og-image.png (regenerate dengan `bun scripts/gen-og.mjs` jika perlu ubah teks); ikon dari gen-icon.mjs.
 - Fitur aktif kini: catat hari ini/backdate + kicker kanji dinamis, feed bulan→pekan (double-rule, count orang), salin ringkasan bulan (dengan count orang), ubah inline, hapus dua-langkah, PWA hanko, OG card untuk share WhatsApp/Line.
 - Ide kandidat ronde berikutnya: service worker offline ringan, tombol "pakai catatan terakhir" untuk latihan berulang, filter berbagi ringkasan per-pekan via WhatsApp (wa.me) — opsi, tetap minimum.
+
+---
+Task ID: cron-review-6
+Agent: main (Z.ai Code, webDevReview cron)
+Task: QA rutin + pengembangan lanjutan (desain Jepang minimalis terkunci).
+
+Work Log:
+- QA awal: server hidup, DB bersih, lint bersih; smoke test submit → feed OK, console bersih.
+- Perbaikan kecil: warning `metadataBase` di dev.log hilang — ditambahkan `metadataBase: new URL("http://localhost:3000")` di metadata layout.tsx (fresh load tanpa warning).
+- Fitur baru — BAGIKAN VIA WHATSAPP:
+  - Link kecil "whatsapp" di header bulan (di samping "salin", dipisah titik tipis) — membuka `https://wa.me/?text=…` berisi buildMonthSummary lengkap (total, per pekan, per orang). Terverifikasi: href ter-dekode benar, target _blank + rel noreferrer.
+- Fitur baru — PAKAI DATA LATIHAN TERAKHIR:
+  - Saat form kosong, muncul baris kecil: Latihan terakhir: "…" · [pakai lagi] — mengisi judul, durasi (konversi menit→jam koma), dan catatan dari entri terbaru. Nama TIDAK ditimpa (sudah dari localStorage). Link hilang begitu ada isian, muncul lagi setelah reset pasca-kirim. Terverifikasi E2E: klik → terisi → kirim → entri baru masuk.
+- Detail styling:
+  - Foto di kartu kini tampil seperti cetakan ditempel di album foto Showa: frame putih hairline (p-1, bg-white, rounded-[2px]), bayangan kertas sangat lembut, kemiringan ±0,4° (alternating via id), lurus kembali saat hover; `motion-reduce:rotate-0 motion-reduce:transition-none`.
+  - Footer: tombol kecil "↑ atas" di kanan (scroll halus, langsung jika prefers-reduced-motion) — berguna saat feed memanjang.
+  - Chip durasi kini memakai `aria-pressed` (screen reader tahu chip terpilih).
+- Verifikasi E2E (1280 & 390): submit + foto → kartu dengan cetakan miring; edit 1,5→2 jam tersinkron; hapus dua-langkah ×2 → DB kosong; scroll-top OK; screenshot desktop & mobile rapi; lint 0 masalah; data tes dibersihkan (DB, uploads, localStorage profil tes).
+
+Stage Summary:
+- Tidak ada perubahan API/skema. Kontrak tetap: GET/POST /api/logs (+date opsional), PATCH/DELETE /api/logs/[id].
+- Fitur aktif kini: catat hari ini/backdate + kicker kanji dinamis, pakai-lagi (prefill dari latihan terakhir), feed bulan→pekan (double-rule, count orang), salin ringkasan + bagikan WhatsApp, ubah inline, hapus dua-langkah, foto ala cetakan album, PWA hanko, OG card, footer ↑ atas.
+- Prinsip desain tetap terkunci: washi/sumi/shu, Zen fonts, .font-kanji, hairline borders, link teks kecil lowercase — tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
+- Ide kandidat ronde berikutnya: service worker offline ringan, ekspor ringkasan sebagai gambar (canvas), label kecil jumlah foto per bulan — tetap minimum dan konsisten estetika.
