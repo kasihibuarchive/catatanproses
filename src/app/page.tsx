@@ -10,8 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ACTOR_NAME_STORAGE_KEY,
   buildEntrySummary,
+  buildMonthCsv,
   buildMonthSummary,
   dateKey,
+  DRAFT_STORAGE_KEY,
   formatDuration,
   groupByMonthWeek,
   hoursToMinutes,
@@ -22,6 +24,7 @@ import {
   sortFeedLogs,
   toDateKey,
   WEEKDAY_KANJI,
+  type FormDraft,
   type MonthGroup,
   type PracticeLog,
 } from "@/lib/panggung";
@@ -230,6 +233,8 @@ export default function Page() {
                       <CopyMonthButton month={month} />
                       <span aria-hidden className="text-foreground/20">·</span>
                       <DownloadMonthImage month={month} />
+                      <span aria-hidden className="text-foreground/20">·</span>
+                      <DownloadMonthCsv month={month} />
                     </div>
                   </div>
                   {month.weeks.map((week) => (
@@ -335,6 +340,29 @@ function DownloadMonthImage({ month }: { month: MonthGroup }) {
   );
 }
 
+/** Quiet link that downloads the month ledger as a plain CSV file. */
+function DownloadMonthCsv({ month }: { month: MonthGroup }) {
+  const download = () => {
+    const csv = `\uFEFF${buildMonthCsv(month)}`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `kekiro-${month.key}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast.success("CSV diunduh.");
+  };
+
+  return (
+    <button type="button" onClick={download} className={textLink}>
+      csv
+    </button>
+  );
+}
+
 function CopyMonthButton({ month }: { month: MonthGroup }) {
   const [copied, setCopied] = useState(false);
 
@@ -384,14 +412,44 @@ function LogForm({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Prefill name from localStorage (client only).
+  // Prefill name from localStorage (client only), then restore any unsent
+  // draft so a reload never loses what was being typed.
   useEffect(() => {
     const saved = window.localStorage.getItem(ACTOR_NAME_STORAGE_KEY);
     if (saved) setActorName(saved);
     setTodayKey(toDateKey(new Date()));
+
+    try {
+      const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as Partial<FormDraft>;
+      if (!d.title && !d.durationHours && !d.notes) return;
+      if (d.actorName) setActorName(d.actorName);
+      if (d.title) setTitle(d.title);
+      if (d.durationHours) setDurationHours(d.durationHours);
+      if (d.notes) setNotes(d.notes);
+      setDraftRestored(true);
+    } catch {
+      // Corrupt draft — ignore, start fresh.
+    }
   }, []);
+
+  // Persist the draft on every keystroke; cleared once the form is empty.
+  // Only content fields count — the name alone lives in its own key.
+  useEffect(() => {
+    const draft: FormDraft = { actorName, title, durationHours, notes };
+    const hasContent = Boolean(
+      title.trim() || durationHours.trim() || notes.trim()
+    );
+    if (hasContent) {
+      window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } else {
+      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+    }
+  }, [actorName, title, durationHours, notes]);
 
   const isToday = !dateValue || (todayKey !== "" && dateValue === todayKey);
   const isYesterday =
@@ -429,6 +487,7 @@ function LogForm({
     setNotes("");
     setDateValue("");
     setShowDatePicker(false);
+    setDraftRestored(false);
     pickPhoto(null);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -518,6 +577,27 @@ function LogForm({
           Latihan terakhir: “{lastLog?.title}” ·{" "}
           <button type="button" onClick={reuseLast} className={textLink}>
             pakai lagi
+          </button>
+        </p>
+      )}
+      {draftRestored && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          <span aria-hidden className="font-kanji mr-1.5 text-[11px] text-seal/75">
+            下書き
+          </span>
+          draf yang belum terkirim dipulihkan ·{" "}
+          <button
+            type="button"
+            onClick={() => {
+              setActorName("");
+              setTitle("");
+              setDurationHours("");
+              setNotes("");
+              setDraftRestored(false);
+            }}
+            className={textLink}
+          >
+            kosongkan
           </button>
         </p>
       )}
@@ -731,6 +811,8 @@ function LogRow({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [focusAfterEdit, setFocusAfterEdit] = useState(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
   const [draft, setDraft] = useState({
     actorName: log.actorName,
     title: log.title,
@@ -751,6 +833,21 @@ function LogRow({
     setConfirming(false);
     setEditing(true);
   };
+
+  /** Leave edit mode and hand focus back to the "ubah" link once it re-mounts. */
+  const cancelEdit = () => {
+    setEditing(false);
+    setFocusAfterEdit(true);
+  };
+
+  // Focus is restored in a post-commit effect so the ref'd "ubah" button
+  // is guaranteed to exist (works for both cancel and save paths).
+  useEffect(() => {
+    if (!editing && focusAfterEdit) {
+      setFocusAfterEdit(false);
+      editButtonRef.current?.focus();
+    }
+  }, [editing, focusAfterEdit]);
 
   const saveEdit = async () => {
     const name = draft.actorName.trim();
@@ -789,6 +886,7 @@ function LogRow({
       }
       onUpdated(data.log);
       setEditing(false);
+      setFocusAfterEdit(true);
       toast.success("Perubahan tersimpan.");
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Gagal menyimpan perubahan.");
@@ -824,7 +922,16 @@ function LogRow({
 
   if (editing) {
     return (
-      <li className="rounded-[3px] border border-foreground/30 bg-card p-4">
+      <li
+        className="rounded-[3px] border border-foreground/30 bg-card p-4"
+        onKeyDown={(e) => {
+          // Escape leaves edit mode without saving — focus returns to "ubah".
+          if (e.key === "Escape" && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            cancelEdit();
+          }
+        }}
+      >
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <input
@@ -880,7 +987,7 @@ function LogRow({
             </p>
           )}
           <div className="flex items-center justify-end gap-4">
-            <button type="button" onClick={() => setEditing(false)} className={textLink}>
+            <button type="button" onClick={cancelEdit} className={textLink}>
               batal
             </button>
             <button
@@ -905,7 +1012,7 @@ function LogRow({
       }`}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <p className="font-serif text-sm font-bold">{log.actorName}</p>
+        <p className="break-words font-serif text-sm font-bold">{log.actorName}</p>
         <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
           <span aria-hidden className="font-kanji mr-1.5 text-[11px] text-seal/75">
             {weekday}
@@ -913,9 +1020,9 @@ function LogRow({
           {dayLabel} · {formatDuration(log.durationMin)}
         </p>
       </div>
-      <p className="mt-1 text-sm">{log.title}</p>
+      <p className="mt-1 break-words text-sm">{log.title}</p>
       {log.notes && (
-        <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">{log.notes}</p>
+        <p className="mt-1.5 whitespace-pre-line break-words text-sm text-muted-foreground">{log.notes}</p>
       )}
       {log.imagePath && (
         <a
@@ -938,7 +1045,12 @@ function LogRow({
       )}
       <div className="mt-3 flex justify-end gap-4">
         <CopyEntryButton log={log} />
-        <button type="button" onClick={startEdit} className={textLink}>
+        <button
+          type="button"
+          ref={editButtonRef}
+          onClick={startEdit}
+          className={textLink}
+        >
           ubah
         </button>
         <button

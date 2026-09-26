@@ -285,3 +285,31 @@ Stage Summary:
 - File baru: public/sw.js, src/components/register-sw.tsx (di-mount layout).
 - Fitur aktif kini: catat hari ini/backdate, pakai-lagi, feed bulan→pekan re-sort instan, salin (bulan/WhatsApp/gambar PNG/per entri), ubah inline + re-date, hapus dua-langkah, foto ala cetakan album, kanji hari, PWA hanko + OG card, skip link, offline fallback SW + indikator offline live.
 - Peta fitur kini LENGKAP sesuai kandidat worklog — ronde berikutnya: hanya polish kecil/regresi; TIDAK ada lagi penambahan fitur besar agar app tetap minimalis (sesuai keinginan user "simpel dan minimalis").
+---
+Task ID: cron-review-10
+Agent: main (Z.ai Code, webDevReview cron)
+Task: QA rutin + polish lanjutan (desain Jepang minimalis terkunci).
+
+Work Log:
+- QA awal: server hidup, console bersih, submit E2E ok (entri muncul, rekap benar). Tidak ada bug lama.
+- Fitur baru — EKSPOR CSV PER BULAN:
+  - `buildMonthCsv(month)` di lib: header `tanggal,nama,durasi (menit),durasi (jam),judul,catatan,foto`; tiap sel di-quote + `"` di-escape + guard formula-injection (`'` prefix untuk `=+@\t\r`); CRLF. `minutesToHoursInput` dipakai ulang (90 → "1,5").
+  - Link kecil "csv" di baris aksi bulan (whatsapp · salin · gambar · csv) — unduh `kekiro-YYYY-MM.csv` dengan BOM \uFEFF (Excel-friendly) + toast. Terverifikasi: file unduhan berisi header + baris benar.
+- Fitur baru — DRAFT OTOMATIS (anti kehilangan tulisan):
+  - `panggung.draft` (localStorage): tiap ketikan menyimpan {actorName,title,durationHours,notes}; hanya field konten yang dihitung (nama sendiri sudah punya key tersendiri) → setelah submit sukses key otomatis terhapus.
+  - Saat load: draft dipulihkan + baris tenang "下書き draf yang belum terkirim dipulihkan · kosongkan" (accent kanji shu). Submit gagal (mis. validasi/offline) → draft TETAP tersimpan (diinginkan). E2E: isi → reload → terpulihkan; submit → key null, hint hilang; "kosongkan" mengosongkan form.
+- A11y — EDIT MODE:
+  - Escape membatalkan edit (jaga isComposing), fokus kembali ke link "ubah".
+  - Fokus juga dikembalikan setelah "simpan" sukses. Bug ditemukan & diperbaiki: panggilan focus awal (dan setTimeout(0)) jalan sebelum commit — saat edit, tombol ber-ref sedang unmounted. Solusi: state `focusAfterEdit` + useEffect post-commit (deterministik utk cancel & save). Terverifikasi E2E: activeElement.textContent === "ubah" di kedua jalur.
+- Detail styling:
+  - `caret-color: var(--seal)` — kursor teks berwarna vermillion (sikat tinta).
+  - Scrollbar tipis senada washi (Firefox scrollbar-width/color + WebKit thumb 18%/32% foreground, track transparan).
+  - `break-words` pada nama/judul/catatan entri (kata panjang tanpa spasi tak merusak kartu).
+- Verifikasi: lint 0 masalah; console fresh-load bersih; dev.log tanpa error; screenshot 390px (aksi bulan wrap rapi ke baris kedua) & 1280px (satu baris, tategaki tetap) ok.
+- Pembersihan: DB 0 baris (2 entri QA dihapus via API), public/uploads kosong, localStorage bersih.
+
+Stage Summary:
+- Tidak ada perubahan API/skema. Kontrak tetap (durationMin menit, POST multipart +date, PATCH/DELETE).
+- Lib baru: buildMonthCsv + csvCell, DRAFT_STORAGE_KEY + FormDraft.
+- Fitur aktif kini: catat hari ini/backdate, pakai-lagi, draf otomatis, feed bulan→pekan re-sort instan, salin (bulan/WhatsApp/gambar PNG/CSV/per entri), ubah inline + re-date (Escape-batal, fokus kembali), hapus dua-langkah, foto ala cetakan album, kanji hari, PWA hanko + OG card, skip link, offline fallback SW + indikator offline, caret vermillion + scrollbar washi.
+- Ronde berikutnya: app dianggap feature-complete; hanya regresi/polish mikro sesuai kebutuhan (jangan tambah fitur besar — user minta simpel & minimalis).

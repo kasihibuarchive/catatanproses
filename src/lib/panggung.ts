@@ -16,6 +16,16 @@ export interface PracticeLog {
 
 export const ACTOR_NAME_STORAGE_KEY = "panggung.actorName";
 
+/** Unsent form draft — so a reload never loses what was being typed. */
+export const DRAFT_STORAGE_KEY = "panggung.draft";
+
+export interface FormDraft {
+  actorName: string;
+  title: string;
+  durationHours: string;
+  notes: string;
+}
+
 /** Compact hour-based duration: "45 mnt", "1,5 jam", "2 jam", "2 jam 5 mnt". */
 export function formatDuration(totalMin: number): string {
   if (totalMin < 60) return `${totalMin} mnt`;
@@ -210,4 +220,42 @@ export function buildEntrySummary(log: PracticeLog): string {
   ];
   if (log.notes.trim()) lines.push(log.notes.trim());
   return lines.join("\n");
+}
+
+/** CSV escape: quote everything, double inner quotes, neutralize formula injection. */
+function csvCell(value: string): string {
+  const text = /^[=+@\t\r]/.test(value) ? `'${value}` : value;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+/** Minimal ledger CSV for one month (feed order). BOM is added at download time. */
+export function buildMonthCsv(month: MonthGroup): string {
+  const header = [
+    "tanggal",
+    "nama",
+    "durasi (menit)",
+    "durasi (jam)",
+    "judul",
+    "catatan",
+    "foto",
+  ];
+  const lines = [header.map(csvCell).join(",")];
+  for (const week of month.weeks) {
+    for (const log of week.logs) {
+      lines.push(
+        [
+          dateKey(log.date),
+          log.actorName.trim(),
+          String(log.durationMin),
+          minutesToHoursInput(log.durationMin),
+          log.title.trim(),
+          log.notes.trim(),
+          log.imagePath ?? "",
+        ]
+          .map(csvCell)
+          .join(",")
+      );
+    }
+  }
+  return lines.join("\r\n");
 }
