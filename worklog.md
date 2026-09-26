@@ -62,3 +62,27 @@ Stage Summary:
 - Aplikasi sekarang minimalis: form 5 field + foto, feed per bulan/pekan. DB bersih, siap dipakai user.
 - Kontrak API final: GET /api/logs, POST /api/logs (multipart: actorName, title, durationMin, notes, image), DELETE /api/logs/[id].
 - Catatan penting untuk agent berikutnya: JANGAN menambah kembali kompleksitas (kategori, dialog, chart, tema gelap) — user secara eksplisit meminta simpel & minimalis; pertahankan estetika terang yang bersih.
+
+---
+Task ID: cron-review-1
+Agent: main (Z.ai Code, webDevReview cron)
+Task: QA rutin + pengembangan lanjutan (tetap memegang prinsip: simpel & minimalis sesuai eksplisit user).
+
+Work Log:
+- QA awal: server hidup (restart via double-fork setsid), GET /api/logs 200, halaman render tanpa error console; smoke test kirim form via UI → toast + masuk feed (FEED-OK).
+- Fitur baru — EDIT ENTRI:
+  - API: PATCH /api/logs/[id] (JSON body parsial: actorName, title, durationMin, notes; zod .partial(); 400 pesan Indonesia, 404 jika id tidak ada, 500 di-catch). Validasi teruji curl: durasi 0 → "Durasi minimal 1 menit.", id palsu → "Log tidak ditemukan.", patch valid → 200.
+  - UI: tombol teks "ubah" di tiap kartu → kartu berubah jadi form inline (nama, durasi, judul, catatan) dengan border lebih tegas, tombol "batal"/"simpan" gaya teks-link konsisten minimalis; sukses → state feed terupdate langsung + toast "Perubahan tersimpan."; batal tidak mengubah apa pun.
+- Detail styling halus (tetap minimalis):
+  - Label tanggal relatif: "Hari ini"/"Kemarin" pada kartu (fallback "26 Sep").
+  - Angka durasi & ringkasan pakai tabular-nums.
+  - Kartu punya transisi hover border halus; mode edit diberi border lebih gelap agar jelas.
+  - Header kanan kini menampilkan tanggal lengkap hari ini (locale id: "Jumat, 26 September") menggantikan teks statis "hari ini".
+- Verifikasi agent-browser: edit (ubah durasi 60→75 → tampil "1 jam 15 mnt", catatan terganti), batal OK, PATCH validation OK, mobile 390px rapi, lint 0 masalah, tanpa console error setelah reload.
+- Bersihkan data tes: DB kosong lagi, public/uploads bersih.
+
+Stage Summary:
+- API final: GET /api/logs · POST /api/logs (multipart) · PATCH /api/logs/[id] (JSON parsial) · DELETE /api/logs/[id].
+- Fitur aktif: catat hari ini (form inline 5 field + foto), feed bulan→pekan dengan total, ubah entri inline, hapus dua-langkah, prefill nama via localStorage, downscale foto di browser, toast sonner.
+- Prinsip desain terkunci (jangan dilanggar agent berikutnya): light theme putih, teks-link kecil lowercase ("ubah", "hapus"), tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
+- Ide kandidat ronde berikutnya: ekspor ringkasan teks per pekan, kunci penghapusan per-nama (cocokkan nama untuk bisa hapus/ubah), meta viewport theme-color, PWA manifest ringan.

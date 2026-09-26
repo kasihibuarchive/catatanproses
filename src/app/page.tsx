@@ -12,6 +12,7 @@ import {
   dateKey,
   formatDuration,
   groupByMonthWeek,
+  toDateKey,
   type PracticeLog,
 } from "@/lib/panggung";
 
@@ -49,6 +50,10 @@ export default function Page() {
     setLogs((prev) => prev.filter((l) => l.id !== id));
   }, []);
 
+  const handleUpdated = useCallback((updated: PracticeLog) => {
+    setLogs((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+  }, []);
+
   const totalMin = logs.reduce((sum, l) => sum + l.durationMin, 0);
   const groups = groupByMonthWeek(logs);
 
@@ -58,7 +63,13 @@ export default function Page() {
       <header className="border-b">
         <div className="mx-auto flex h-14 w-full max-w-2xl items-center justify-between px-5">
           <p className="text-sm font-semibold tracking-tight">Log Latihan Teater</p>
-          <p className="text-xs text-muted-foreground">hari ini</p>
+          <p className="text-xs text-muted-foreground">
+            {new Date().toLocaleDateString("id-ID", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+          </p>
         </div>
       </header>
 
@@ -68,7 +79,7 @@ export default function Page() {
 
         {/* Summary */}
         {!loading && !error && logs.length > 0 && (
-          <p className="mb-6 text-sm text-muted-foreground">
+          <p className="mb-6 text-sm tabular-nums text-muted-foreground">
             {logs.length} sesi · {formatDuration(totalMin)} total
           </p>
         )}
@@ -111,7 +122,12 @@ export default function Page() {
                     </p>
                     <ul className="mt-2 space-y-2">
                       {week.logs.map((log) => (
-                        <LogRow key={log.id} log={log} onDeleted={handleDeleted} />
+                        <LogRow
+                          key={log.id}
+                          log={log}
+                          onDeleted={handleDeleted}
+                          onUpdated={handleUpdated}
+                        />
                       ))}
                     </ul>
                   </div>
@@ -244,6 +260,7 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
               value={durationMin}
               onChange={(e) => setDurationMin(e.target.value)}
               placeholder="90"
+              className="tabular-nums"
             />
           </div>
         </div>
@@ -319,14 +336,85 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
 
 /* ---------- Log row ---------- */
 
+function relativeDayLabel(day: string): string | null {
+  const today = toDateKey(new Date());
+  if (day === today) return "Hari ini";
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (day === toDateKey(yesterday)) return "Kemarin";
+  return null;
+}
+
 function LogRow({
   log,
   onDeleted,
+  onUpdated,
 }: {
   log: PracticeLog;
   onDeleted: (id: string) => void;
+  onUpdated: (log: PracticeLog) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [draft, setDraft] = useState({
+    actorName: log.actorName,
+    title: log.title,
+    durationMin: String(log.durationMin),
+    notes: log.notes,
+  });
+
+  const startEdit = () => {
+    setDraft({
+      actorName: log.actorName,
+      title: log.title,
+      durationMin: String(log.durationMin),
+      notes: log.notes,
+    });
+    setEditError(null);
+    setConfirming(false);
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    const name = draft.actorName.trim();
+    const title = draft.title.trim();
+    const duration = Number(draft.durationMin);
+    if (!name) return setEditError("Nama tidak boleh kosong.");
+    if (!title) return setEditError("Judul tidak boleh kosong.");
+    if (!draft.durationMin || Number.isNaN(duration) || duration < 1) {
+      return setEditError("Isi durasi (menit).");
+    }
+
+    setSaving(true);
+    setEditError(null);
+    try {
+      const res = await fetch(`/api/logs/${log.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actorName: name,
+          title,
+          durationMin: Math.round(duration),
+          notes: draft.notes.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { log?: PracticeLog; error?: string }
+        | null;
+      if (!res.ok || !data?.log) {
+        throw new Error(data?.error ?? "Gagal menyimpan perubahan.");
+      }
+      onUpdated(data.log);
+      setEditing(false);
+      toast.success("Perubahan tersimpan.");
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Gagal menyimpan perubahan.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const remove = async () => {
     if (!confirming) {
@@ -344,15 +432,79 @@ function LogRow({
     }
   };
 
-  const d = new Date(`${dateKey(log.date)}T00:00:00`);
-  const dateLabel = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+  const day = dateKey(log.date);
+  const dayLabel =
+    relativeDayLabel(day) ??
+    new Date(`${day}T00:00:00`).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+    });
+
+  if (editing) {
+    return (
+      <li className="rounded-lg border border-foreground/25 p-4">
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input
+              value={draft.actorName}
+              onChange={(e) => setDraft({ ...draft, actorName: e.target.value })}
+              aria-label="Nama"
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:border-foreground/40"
+              autoFocus
+            />
+            <input
+              value={draft.durationMin}
+              onChange={(e) => setDraft({ ...draft, durationMin: e.target.value })}
+              type="number"
+              min={1}
+              max={1440}
+              inputMode="numeric"
+              aria-label="Durasi (menit)"
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm tabular-nums outline-none focus:border-foreground/40"
+            />
+          </div>
+          <input
+            value={draft.title}
+            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            aria-label="Apa yang dilatih"
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:border-foreground/40"
+          />
+          <textarea
+            value={draft.notes}
+            onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+            rows={3}
+            aria-label="Catatan"
+            className="w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
+          />
+          {editError && <p className="text-sm text-destructive">{editError}</p>}
+          <div className="flex items-center justify-end gap-4">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              batal
+            </button>
+            <button
+              type="button"
+              onClick={saveEdit}
+              disabled={saving}
+              className="text-xs font-semibold underline underline-offset-2 disabled:opacity-50"
+            >
+              {saving ? "menyimpan…" : "simpan"}
+            </button>
+          </div>
+        </div>
+      </li>
+    );
+  }
 
   return (
-    <li className="rounded-lg border p-4">
+    <li className="rounded-lg border p-4 transition-colors hover:border-foreground/25">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-sm font-semibold">{log.actorName}</p>
-        <p className="shrink-0 text-xs text-muted-foreground">
-          {dateLabel} · {formatDuration(log.durationMin)}
+        <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          {dayLabel} · {formatDuration(log.durationMin)}
         </p>
       </div>
       <p className="mt-1 text-sm">{log.title}</p>
@@ -371,7 +523,14 @@ function LogRow({
           />
         </a>
       )}
-      <div className="mt-3 flex justify-end">
+      <div className="mt-3 flex justify-end gap-4">
+        <button
+          type="button"
+          onClick={startEdit}
+          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          ubah
+        </button>
         <button
           type="button"
           onClick={remove}
