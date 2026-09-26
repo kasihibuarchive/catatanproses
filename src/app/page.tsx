@@ -9,12 +9,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ACTOR_NAME_STORAGE_KEY,
+  buildMonthSummary,
   dateKey,
   formatDuration,
   groupByMonthWeek,
   toDateKey,
+  type MonthGroup,
   type PracticeLog,
 } from "@/lib/panggung";
+
+/** Quiet lowercase text-link used for all small actions. */
+const textLink =
+  "rounded-sm text-xs underline underline-offset-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 export default function Page() {
   const [logs, setLogs] = useState<PracticeLog[]>([]);
@@ -109,11 +115,19 @@ export default function Page() {
           <div className="space-y-8 pb-16">
             {groups.map((month) => (
               <section key={month.key}>
-                <div className="flex items-baseline justify-between border-b pb-2">
-                  <h2 className="text-sm font-semibold">{month.label}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDuration(month.totalMin)}
-                  </p>
+                <div className="flex items-baseline justify-between gap-3 border-b pb-2">
+                  <h2 className="text-sm font-semibold">
+                    {month.label}
+                    <span className="ml-2 text-xs font-normal tabular-nums text-muted-foreground">
+                      {month.weeks.reduce((n, w) => n + w.logs.length, 0)} sesi
+                    </span>
+                  </h2>
+                  <div className="flex shrink-0 items-baseline gap-3">
+                    <p className="text-xs tabular-nums text-muted-foreground">
+                      {formatDuration(month.totalMin)}
+                    </p>
+                    <CopyMonthButton month={month} />
+                  </div>
                 </div>
                 {month.weeks.map((week) => (
                   <div key={week.key} className="mt-4">
@@ -140,13 +154,36 @@ export default function Page() {
 
       {/* Footer */}
       <footer className="mt-auto border-t">
-        <div className="mx-auto w-full max-w-2xl px-5 py-5">
+        <div className="mx-auto w-full max-w-2xl px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <p className="text-xs text-muted-foreground">
             Catat latihan, lihat perkembangannya dari pekan ke pekan.
           </p>
         </div>
       </footer>
     </div>
+  );
+}
+
+/* ---------- Copy month summary ---------- */
+
+function CopyMonthButton({ month }: { month: MonthGroup }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(buildMonthSummary(month));
+      toast.success("Ringkasan disalin.");
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      toast.error("Gagal menyalin.");
+    }
+  };
+
+  return (
+    <button type="button" onClick={copy} className={textLink}>
+      {copied ? "tersalin" : "salin"}
+    </button>
   );
 }
 
@@ -184,8 +221,8 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setFieldError(null);
 
     if (!actorName.trim()) return setFieldError("Isi nama dulu ya.");
@@ -231,7 +268,17 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
   };
 
   return (
-    <form onSubmit={submit} className="py-8" noValidate>
+    <form
+      onSubmit={submit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          void submit();
+        }
+      }}
+      className="py-8"
+      noValidate
+    >
       <h1 className="text-lg font-semibold tracking-tight">Catat latihan hari ini</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Isi detilnya, tambahkan foto kalau ada, lalu kirim.
@@ -262,6 +309,21 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
               placeholder="90"
               className="tabular-nums"
             />
+            <div className="flex items-center gap-1">
+              {[30, 60, 90, 120].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setDurationMin(String(m))}
+                  aria-label={`Set durasi ${m} menit`}
+                  className={`rounded px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
+                    durationMin === String(m) ? "bg-muted text-foreground" : ""
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -316,7 +378,7 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
                   pickPhoto(null);
                   if (fileRef.current) fileRef.current.value = "";
                 }}
-                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                className={textLink}
               >
                 buang
               </button>
@@ -324,7 +386,11 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
           )}
         </div>
 
-        {fieldError && <p className="text-sm text-destructive">{fieldError}</p>}
+        {fieldError && (
+          <p role="alert" className="text-sm text-destructive">
+            {fieldError}
+          </p>
+        )}
 
         <Button type="submit" disabled={submitting} className="w-full sm:w-auto sm:min-w-32">
           {submitting ? "Mengirim…" : "Kirim"}
@@ -476,12 +542,16 @@ function LogRow({
             aria-label="Catatan"
             className="w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
           />
-          {editError && <p className="text-sm text-destructive">{editError}</p>}
+          {editError && (
+            <p role="alert" className="text-sm text-destructive">
+              {editError}
+            </p>
+          )}
           <div className="flex items-center justify-end gap-4">
             <button
               type="button"
               onClick={() => setEditing(false)}
-              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              className={textLink}
             >
               batal
             </button>
@@ -489,7 +559,7 @@ function LogRow({
               type="button"
               onClick={saveEdit}
               disabled={saving}
-              className="text-xs font-semibold underline underline-offset-2 disabled:opacity-50"
+              className="rounded-sm text-xs font-semibold underline underline-offset-2 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               {saving ? "menyimpan…" : "simpan"}
             </button>
@@ -519,25 +589,19 @@ function LogRow({
             src={log.imagePath}
             alt={`Foto latihan ${log.title}`}
             loading="lazy"
-            className="max-h-80 w-full rounded-md border object-cover"
+            className="max-h-80 w-full rounded-md border object-cover transition-opacity hover:opacity-90"
           />
         </a>
       )}
       <div className="mt-3 flex justify-end gap-4">
-        <button
-          type="button"
-          onClick={startEdit}
-          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-        >
+        <button type="button" onClick={startEdit} className={textLink}>
           ubah
         </button>
         <button
           type="button"
           onClick={remove}
           onBlur={() => setConfirming(false)}
-          className={`text-xs underline underline-offset-2 ${
-            confirming ? "text-destructive" : "text-muted-foreground hover:text-foreground"
-          }`}
+          className={`${textLink} ${confirming ? "text-destructive hover:text-destructive" : ""}`}
         >
           {confirming ? "yakin? klik lagi" : "hapus"}
         </button>

@@ -103,3 +103,36 @@ export function groupByMonthWeek(logs: PracticeLog[]): MonthGroup[] {
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
+/** Plain-text recap of one month, ready to paste into a chat. */
+export function buildMonthSummary(month: MonthGroup): string {
+  const totalSessions = month.weeks.reduce((n, w) => n + w.logs.length, 0);
+  const lines: string[] = [
+    `Log Latihan — ${month.label}`,
+    `Total: ${totalSessions} sesi · ${formatDuration(month.totalMin)}`,
+  ];
+
+  for (const week of month.weeks) {
+    lines.push("");
+    lines.push(
+      `${week.range}: ${week.logs.length} sesi · ${formatDuration(week.totalMin)}`
+    );
+
+    // Per-person totals within the week (case-insensitive name grouping).
+    const byActor = new Map<string, { name: string; min: number }>();
+    for (const log of week.logs) {
+      const key = log.actorName.trim().toLowerCase();
+      const entry = byActor.get(key);
+      if (entry) {
+        entry.min += log.durationMin;
+      } else {
+        byActor.set(key, { name: log.actorName.trim(), min: log.durationMin });
+      }
+    }
+    for (const actor of [...byActor.values()].sort((a, b) => b.min - a.min)) {
+      lines.push(`• ${actor.name} — ${formatDuration(actor.min)}`);
+    }
+  }
+
+  return lines.join("\n");
+}

@@ -86,3 +86,30 @@ Stage Summary:
 - Fitur aktif: catat hari ini (form inline 5 field + foto), feed bulan→pekan dengan total, ubah entri inline, hapus dua-langkah, prefill nama via localStorage, downscale foto di browser, toast sonner.
 - Prinsip desain terkunci (jangan dilanggar agent berikutnya): light theme putih, teks-link kecil lowercase ("ubah", "hapus"), tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
 - Ide kandidat ronde berikutnya: ekspor ringkasan teks per pekan, kunci penghapusan per-nama (cocokkan nama untuk bisa hapus/ubah), meta viewport theme-color, PWA manifest ringan.
+
+---
+Task ID: cron-review-2
+Agent: main (Z.ai Code, webDevReview cron)
+Task: QA rutin via agent-browser + pengembangan lanjutan (prinsip simpel & minimalis tetap terkunci).
+
+Work Log:
+- QA awal: server hidup, GET /api/logs 200 & DB bersih, lint 0 masalah. E2E agent-browser lolos semua: submit form + foto (preview muncul, feed ter-update "1 sesi · 1 jam 15 mnt"), edit inline (75→90 mnt, ringkasan ikut berubah), hapus dua-langkah, render mobile 390px rapi, tanpa bug baru.
+- Fitur baru — SALIN RINGKASAN BULAN:
+  - lib: buildMonthSummary(month) → teks pola siap-tempel ke chat: "Log Latihan — {bulan}\nTotal: N sesi · X jam\n\n{rentang pekan}: N sesi · total\n• {orang} — durasi" (agregasi per-orang per-pekan, nama case-insensitive, urut durasi desc).
+  - UI: link teks "salin" di header tiap bulan (kanan, sejajar durasi) → navigator.clipboard.writeText + toast "Ringkasan disalin." / "Gagal menyalin."; state "tersalin" 1,6 detik. Terverifikasi via stub clipboard: konten teks tepat (per-orang Raka QA 1 j 15 mnt, Dina 45 mnt).
+- Detail styling (tetap minimalis):
+  - Header bulan kini "September 2026 · N sesi" (count sesi tabular-nums).
+  - Chips durasi cepat 30/60/90/120 di bawah input durasi — quiet gray, hover bg-muted, aktif bg-muted; aria-label "Set durasi N menit".
+  - Footer: safe-area iOS (pb-[max(1.25rem,env(safe-area-inset-bottom))]).
+  - Semua link teks kecil (ubah/hapus/buang/batal/salin) kini satu konstanta textLink + focus-visible ring (a11y keyboard).
+  - Error inline pakai role="alert" (fieldError & editError).
+  - Foto di kartu: hover:opacity-90 halus.
+- UX: Ctrl/Cmd+Enter mengirim form dari field mana pun (submit di-refactor terima e?); viewport themeColor #fcfcfc di layout.tsx.
+- Verifikasi: semua fitur baru diuji agent-browser (chip 90 → input terisi, salin → toast+state, Ctrl+Enter → entri masuk "3 sesi · 3 jam 30 mnt"), desktop & mobile screenshot rapi, lint 0 masalah, console bersih pada load fresh (error lama di buffer console terbukti sisa histori HMR sebelum redesign — folder components/panggung sudah kosong).
+- Bersihkan data tes: DB kosong, public/uploads kosong.
+
+Stage Summary:
+- API tetap: GET/POST /api/logs, PATCH/DELETE /api/logs/[id]. Tidak ada perubahan skema.
+- Fitur aktif: catat (form inline + foto + chips durasi + Ctrl/Cmd+Enter), feed bulan→pekan + count sesi, salin ringkasan bulan ke clipboard, ubah inline, hapus dua-langkah, prefill nama localStorage, downscale foto browser, toast sonner.
+- Prinsip desain tetap terkunci: light theme putih, link teks kecil lowercase, tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
+- Ide kandidat ronde berikutnya: format jam otomatis "1,5" input alternatif, tanggal bisa backdate (latihan kemarin/lusa), manifest PWA ringan.
