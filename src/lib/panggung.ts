@@ -16,12 +16,28 @@ export interface PracticeLog {
 
 export const ACTOR_NAME_STORAGE_KEY = "panggung.actorName";
 
-/** "45 mnt" atau "1 j 30 mnt". */
+/** Compact hour-based duration: "45 mnt", "1,5 jam", "2 jam", "2 jam 5 mnt". */
 export function formatDuration(totalMin: number): string {
   if (totalMin < 60) return `${totalMin} mnt`;
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  return m === 0 ? `${h} jam` : `${h} jam ${m} mnt`;
+  if (m === 0) return `${h} jam`;
+  if (m === 30) return `${h},5 jam`;
+  return `${h} jam ${m} mnt`;
+}
+
+/** Parse hours input ("1,5" / "1.5" / "2") into whole minutes; null if invalid. */
+export function hoursToMinutes(input: string): number | null {
+  const normalized = input.trim().replace(",", ".");
+  if (!normalized) return null;
+  const hours = Number(normalized);
+  if (Number.isNaN(hours)) return null;
+  return Math.round(hours * 60);
+}
+
+/** Minutes -> editable hours string with comma decimal ("90" -> "1,5"). */
+export function minutesToHoursInput(min: number): string {
+  return String(parseFloat((min / 60).toFixed(2))).replace(".", ",");
 }
 
 /** Extract "YYYY-MM-DD" from an ISO datetime string (timezone-shift safe). */

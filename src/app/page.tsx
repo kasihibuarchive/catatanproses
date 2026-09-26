@@ -13,6 +13,8 @@ import {
   dateKey,
   formatDuration,
   groupByMonthWeek,
+  hoursToMinutes,
+  minutesToHoursInput,
   toDateKey,
   type MonthGroup,
   type PracticeLog,
@@ -22,10 +24,15 @@ import {
 const textLink =
   "rounded-sm text-xs underline underline-offset-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
+/** Ink underline input — quiet, like a brush line. */
+const underlineInput =
+  "h-10 w-full rounded-none border-0 border-b border-foreground/20 bg-transparent px-1 text-sm shadow-none transition-colors placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-0 focus-visible:border-seal";
+
 export default function Page() {
   const [logs, setLogs] = useState<PracticeLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -45,12 +52,16 @@ export default function Page() {
     void refresh();
   }, [refresh]);
 
-  const handleCreated = useCallback(
-    (log: PracticeLog) => {
-      setLogs((prev) => [log, ...prev]);
-    },
-    []
-  );
+  const handleCreated = useCallback((log: PracticeLog) => {
+    setLogs((prev) => [log, ...prev]);
+    setJustAddedId(log.id);
+    window.setTimeout(() => {
+      setJustAddedId((current) => (current === log.id ? null : current));
+      document
+        .getElementById(`log-${log.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 120);
+  }, []);
 
   const handleDeleted = useCallback((id: string) => {
     setLogs((prev) => prev.filter((l) => l.id !== id));
@@ -64,12 +75,36 @@ export default function Page() {
   const groups = groupByMonthWeek(logs);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="relative flex min-h-screen flex-col">
+      {/* washi paper grain */}
+      <div aria-hidden className="washi-grain pointer-events-none fixed inset-0 -z-10" />
+      {/* vertical tategaki accent, wide screens only */}
+      <p
+        aria-hidden
+        className="font-kanji fixed right-6 top-1/2 hidden -translate-y-1/2 select-none text-sm tracking-[0.6em] text-foreground/15 lg:block [writing-mode:vertical-rl]"
+      >
+        稽古日誌
+      </p>
+
       {/* Header */}
-      <header className="border-b">
-        <div className="mx-auto flex h-14 w-full max-w-2xl items-center justify-between px-5">
-          <p className="text-sm font-semibold tracking-tight">Log Latihan Teater</p>
-          <p className="text-xs text-muted-foreground">
+      <header className="border-b border-foreground/10">
+        <div className="mx-auto flex h-16 w-full max-w-2xl items-center justify-between px-5">
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="font-kanji flex size-9 flex-col items-center justify-center rounded-[3px] bg-seal text-[11px] leading-[1.2] text-[#f7f2e6] ring-1 ring-inset ring-white/25"
+            >
+              <span>稽</span>
+              <span>古</span>
+            </span>
+            <div>
+              <p className="font-serif text-sm leading-tight tracking-wide">稽古日誌</p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                Log Latihan Teater
+              </p>
+            </div>
+          </div>
+          <p className="text-xs tabular-nums text-muted-foreground">
             {new Date().toLocaleDateString("id-ID", {
               weekday: "long",
               day: "numeric",
@@ -93,9 +128,9 @@ export default function Page() {
         {/* Feed */}
         {loading ? (
           <div className="space-y-3 pb-16">
-            <div className="h-5 w-40 rounded bg-muted" />
-            <div className="h-24 rounded-lg border" />
-            <div className="h-24 rounded-lg border" />
+            <div className="h-5 w-40 rounded bg-foreground/5" />
+            <div className="h-24 rounded-[3px] border border-foreground/10" />
+            <div className="h-24 rounded-[3px] border border-foreground/10" />
           </div>
         ) : error ? (
           <div className="pb-16 text-sm text-muted-foreground">
@@ -105,20 +140,26 @@ export default function Page() {
             </Button>
           </div>
         ) : logs.length === 0 ? (
-          <div className="pb-20">
-            <p className="text-sm font-medium">Belum ada catatan.</p>
+          <div className="border-t border-foreground/10 pb-20 pt-12 text-center">
+            <p aria-hidden className="font-kanji text-4xl text-foreground/15">
+              空
+            </p>
+            <p className="mt-4 text-sm font-medium">Belum ada catatan.</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Isi form di atas untuk mencatat latihan pertamamu.
             </p>
           </div>
         ) : (
-          <div className="space-y-8 pb-16">
+          <div className="space-y-10 pb-16">
             {groups.map((month) => (
               <section key={month.key}>
-                <div className="flex items-baseline justify-between gap-3 border-b pb-2">
-                  <h2 className="text-sm font-semibold">
+                <div className="flex items-baseline justify-between gap-3 border-b border-foreground/15 pb-2">
+                  <h2 className="font-serif text-base tracking-wide">
                     {month.label}
-                    <span className="ml-2 text-xs font-normal tabular-nums text-muted-foreground">
+                    <span aria-hidden className="font-kanji ml-2 text-xs text-seal">
+                      {Number(month.key.split("-")[1])}月
+                    </span>
+                    <span className="ml-2 text-xs font-sans font-normal tabular-nums text-muted-foreground">
                       {month.weeks.reduce((n, w) => n + w.logs.length, 0)} sesi
                     </span>
                   </h2>
@@ -130,8 +171,8 @@ export default function Page() {
                   </div>
                 </div>
                 {month.weeks.map((week) => (
-                  <div key={week.key} className="mt-4">
-                    <p className="text-xs text-muted-foreground">
+                  <div key={week.key} className="mt-5">
+                    <p className="text-xs tracking-wide text-muted-foreground">
                       {week.range} · {formatDuration(week.totalMin)}
                     </p>
                     <ul className="mt-2 space-y-2">
@@ -139,6 +180,7 @@ export default function Page() {
                         <LogRow
                           key={log.id}
                           log={log}
+                          justAdded={log.id === justAddedId}
                           onDeleted={handleDeleted}
                           onUpdated={handleUpdated}
                         />
@@ -153,10 +195,11 @@ export default function Page() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto border-t">
-        <div className="mx-auto w-full max-w-2xl px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-          <p className="text-xs text-muted-foreground">
-            Catat latihan, lihat perkembangannya dari pekan ke pekan.
+      <footer className="mt-auto border-t border-foreground/10">
+        <div className="mx-auto w-full max-w-2xl px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
+          <p className="font-kanji text-sm tracking-[0.3em] text-foreground/70">継続は力なり</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Keizoku wa chikara nari — konsistensi adalah kekuatan.
           </p>
         </div>
       </footer>
@@ -189,10 +232,18 @@ function CopyMonthButton({ month }: { month: MonthGroup }) {
 
 /* ---------- Form ---------- */
 
+const DURATION_CHIPS: { label: string; hours: number }[] = [
+  { label: "0,5", hours: 0.5 },
+  { label: "1", hours: 1 },
+  { label: "1,5", hours: 1.5 },
+  { label: "2", hours: 2 },
+  { label: "3", hours: 3 },
+];
+
 function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
   const [actorName, setActorName] = useState("");
   const [title, setTitle] = useState("");
-  const [durationMin, setDurationMin] = useState("");
+  const [durationHours, setDurationHours] = useState("");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -215,7 +266,7 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
   const reset = (keepName: boolean) => {
     if (!keepName) setActorName("");
     setTitle("");
-    setDurationMin("");
+    setDurationHours("");
     setNotes("");
     pickPhoto(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -225,11 +276,14 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
     e?.preventDefault();
     setFieldError(null);
 
-    if (!actorName.trim()) return setFieldError("Isi nama dulu ya.");
+    if (!actorName.trim()) return setFieldError("Isi nama/divisi dulu ya.");
     if (!title.trim()) return setFieldError("Tulis apa yang dilatih hari ini.");
-    const duration = Number(durationMin);
-    if (!durationMin || Number.isNaN(duration) || duration < 1) {
-      return setFieldError("Isi durasi latihan (menit).");
+    const minutes = hoursToMinutes(durationHours);
+    if (minutes === null || minutes < 1) {
+      return setFieldError("Isi durasi latihan (jam).");
+    }
+    if (minutes > 1440) {
+      return setFieldError("Durasi maksimal 24 jam.");
     }
 
     setSubmitting(true);
@@ -237,7 +291,7 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
       const fd = new FormData();
       fd.set("actorName", actorName.trim());
       fd.set("title", title.trim());
-      fd.set("durationMin", String(Math.round(duration)));
+      fd.set("durationMin", String(minutes));
       fd.set("notes", notes.trim());
 
       let file: File | null = photo;
@@ -276,51 +330,54 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
           void submit();
         }
       }}
-      className="py-8"
+      className="pb-8 pt-10"
       noValidate
     >
-      <h1 className="text-lg font-semibold tracking-tight">Catat latihan hari ini</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p aria-hidden className="font-kanji text-xs tracking-[0.35em] text-seal">
+        今日の稽古
+      </p>
+      <h1 className="mt-2 font-serif text-2xl tracking-tight">Catat latihan hari ini</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
         Isi detilnya, tambahkan foto kalau ada, lalu kirim.
       </p>
 
-      <div className="mt-5 space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+      <div className="mt-6 space-y-5">
+        <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="actorName">Nama</Label>
+            <Label htmlFor="actorName">Nama/Divisi</Label>
             <Input
               id="actorName"
               value={actorName}
               onChange={(e) => setActorName(e.target.value)}
-              placeholder="Namamu atau nama kelompok"
+              placeholder="cth. Raka — Divisi Akting"
               autoComplete="name"
+              className={underlineInput}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="durationMin">Durasi (menit)</Label>
+            <Label htmlFor="durationHours">Durasi (jam)</Label>
             <Input
-              id="durationMin"
-              type="number"
-              min={1}
-              max={1440}
-              inputMode="numeric"
-              value={durationMin}
-              onChange={(e) => setDurationMin(e.target.value)}
-              placeholder="90"
-              className="tabular-nums"
+              id="durationHours"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={durationHours}
+              onChange={(e) => setDurationHours(e.target.value)}
+              placeholder="1,5"
+              className={`${underlineInput} tabular-nums`}
             />
             <div className="flex items-center gap-1">
-              {[30, 60, 90, 120].map((m) => (
+              {DURATION_CHIPS.map((chip) => (
                 <button
-                  key={m}
+                  key={chip.label}
                   type="button"
-                  onClick={() => setDurationMin(String(m))}
-                  aria-label={`Set durasi ${m} menit`}
-                  className={`rounded px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
-                    durationMin === String(m) ? "bg-muted text-foreground" : ""
+                  onClick={() => setDurationHours(chip.label)}
+                  aria-label={`Set durasi ${chip.label} jam`}
+                  className={`rounded px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
+                    durationHours === chip.label ? "bg-foreground/5 text-foreground" : ""
                   }`}
                 >
-                  {m}
+                  {chip.label}
                 </button>
               ))}
             </div>
@@ -334,6 +391,7 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="cth. Latihan bloking adegan 3"
+            className={underlineInput}
           />
         </div>
 
@@ -345,6 +403,7 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Yang sulit, yang menemukan, catatan sutradara…"
+            className="min-h-20 w-full resize-y rounded-[3px] border-foreground/15 bg-card/70 px-3 py-2 text-sm shadow-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-seal focus-visible:outline-none focus-visible:ring-0"
           />
         </div>
 
@@ -370,7 +429,7 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
               <img
                 src={photoPreview}
                 alt="Pratinjau foto latihan"
-                className="size-12 rounded-md border object-cover"
+                className="size-12 rounded-[3px] border border-foreground/15 object-cover"
               />
               <button
                 type="button"
@@ -392,7 +451,11 @@ function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
           </p>
         )}
 
-        <Button type="submit" disabled={submitting} className="w-full sm:w-auto sm:min-w-32">
+        <Button
+          type="submit"
+          disabled={submitting}
+          className="w-full tracking-wide sm:w-auto sm:min-w-36"
+        >
           {submitting ? "Mengirim…" : "Kirim"}
         </Button>
       </div>
@@ -413,10 +476,12 @@ function relativeDayLabel(day: string): string | null {
 
 function LogRow({
   log,
+  justAdded,
   onDeleted,
   onUpdated,
 }: {
   log: PracticeLog;
+  justAdded: boolean;
   onDeleted: (id: string) => void;
   onUpdated: (log: PracticeLog) => void;
 }) {
@@ -427,7 +492,7 @@ function LogRow({
   const [draft, setDraft] = useState({
     actorName: log.actorName,
     title: log.title,
-    durationMin: String(log.durationMin),
+    durationHours: minutesToHoursInput(log.durationMin),
     notes: log.notes,
   });
 
@@ -435,7 +500,7 @@ function LogRow({
     setDraft({
       actorName: log.actorName,
       title: log.title,
-      durationMin: String(log.durationMin),
+      durationHours: minutesToHoursInput(log.durationMin),
       notes: log.notes,
     });
     setEditError(null);
@@ -446,11 +511,14 @@ function LogRow({
   const saveEdit = async () => {
     const name = draft.actorName.trim();
     const title = draft.title.trim();
-    const duration = Number(draft.durationMin);
+    const minutes = hoursToMinutes(draft.durationHours);
     if (!name) return setEditError("Nama tidak boleh kosong.");
     if (!title) return setEditError("Judul tidak boleh kosong.");
-    if (!draft.durationMin || Number.isNaN(duration) || duration < 1) {
-      return setEditError("Isi durasi (menit).");
+    if (minutes === null || minutes < 1) {
+      return setEditError("Isi durasi (jam).");
+    }
+    if (minutes > 1440) {
+      return setEditError("Durasi maksimal 24 jam.");
     }
 
     setSaving(true);
@@ -462,7 +530,7 @@ function LogRow({
         body: JSON.stringify({
           actorName: name,
           title,
-          durationMin: Math.round(duration),
+          durationMin: minutes,
           notes: draft.notes.trim(),
         }),
       });
@@ -508,39 +576,38 @@ function LogRow({
 
   if (editing) {
     return (
-      <li className="rounded-lg border border-foreground/25 p-4">
-        <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+      <li className="rounded-[3px] border border-foreground/30 bg-card p-4">
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <input
               value={draft.actorName}
               onChange={(e) => setDraft({ ...draft, actorName: e.target.value })}
-              aria-label="Nama"
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:border-foreground/40"
+              aria-label="Nama/Divisi"
+              className={underlineInput}
               autoFocus
             />
             <input
-              value={draft.durationMin}
-              onChange={(e) => setDraft({ ...draft, durationMin: e.target.value })}
-              type="number"
-              min={1}
-              max={1440}
-              inputMode="numeric"
-              aria-label="Durasi (menit)"
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm tabular-nums outline-none focus:border-foreground/40"
+              value={draft.durationHours}
+              onChange={(e) => setDraft({ ...draft, durationHours: e.target.value })}
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              aria-label="Durasi (jam)"
+              className={`${underlineInput} tabular-nums`}
             />
           </div>
           <input
             value={draft.title}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })}
             aria-label="Apa yang dilatih"
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:border-foreground/40"
+            className={underlineInput}
           />
           <textarea
             value={draft.notes}
             onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
             rows={3}
             aria-label="Catatan"
-            className="w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground/40"
+            className="w-full resize-y rounded-[3px] border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none transition-colors focus:border-seal"
           />
           {editError && (
             <p role="alert" className="text-sm text-destructive">
@@ -548,11 +615,7 @@ function LogRow({
             </p>
           )}
           <div className="flex items-center justify-end gap-4">
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className={textLink}
-            >
+            <button type="button" onClick={() => setEditing(false)} className={textLink}>
               batal
             </button>
             <button
@@ -570,18 +633,21 @@ function LogRow({
   }
 
   return (
-    <li className="rounded-lg border p-4 transition-colors hover:border-foreground/25">
+    <li
+      id={`log-${log.id}`}
+      className={`rounded-[3px] border bg-card p-4 transition-colors hover:border-foreground/30 ${
+        justAdded ? "entry-flash border-seal/40" : "border-foreground/10"
+      }`}
+    >
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-sm font-semibold">{log.actorName}</p>
+        <p className="font-serif text-sm font-bold">{log.actorName}</p>
         <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
           {dayLabel} · {formatDuration(log.durationMin)}
         </p>
       </div>
       <p className="mt-1 text-sm">{log.title}</p>
       {log.notes && (
-        <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">
-          {log.notes}
-        </p>
+        <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">{log.notes}</p>
       )}
       {log.imagePath && (
         <a href={log.imagePath} target="_blank" rel="noreferrer" className="mt-3 block">
@@ -589,7 +655,7 @@ function LogRow({
             src={log.imagePath}
             alt={`Foto latihan ${log.title}`}
             loading="lazy"
-            className="max-h-80 w-full rounded-md border object-cover transition-opacity hover:opacity-90"
+            className="max-h-80 w-full rounded-[3px] border border-foreground/10 object-cover transition-opacity hover:opacity-90"
           />
         </a>
       )}

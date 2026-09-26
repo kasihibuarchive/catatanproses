@@ -113,3 +113,25 @@ Stage Summary:
 - Fitur aktif: catat (form inline + foto + chips durasi + Ctrl/Cmd+Enter), feed bulan→pekan + count sesi, salin ringkasan bulan ke clipboard, ubah inline, hapus dua-langkah, prefill nama localStorage, downscale foto browser, toast sonner.
 - Prinsip desain tetap terkunci: light theme putih, link teks kecil lowercase, tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
 - Ide kandidat ronde berikutnya: format jam otomatis "1,5" input alternatif, tanggal bisa backdate (latihan kemarin/lusa), manifest PWA ringan.
+
+---
+Task ID: cron-review-3 (redesign jepang)
+Agent: main (Z.ai Code, webDevReview cron)
+Task: Redesign sesuai feedback user — "terlalu simple... buat lebih minimalis elegan ala jepang era showa atau hiroshige... pilihan font super minimalis modern... form namamu/kelompok ganti jadi nama/divisi... durasi latihan brp jam".
+
+Work Log:
+- Tema baru (globals.css): palet Hiroshige — latar washi cream oklch(0.968 0.013 88), teks sumi ink, aksen vermillion shu-iro (--seal, dipakai hemat: hanko, kicker, fokus input, angka bulan), radius 0.25rem (crisp), ::selection vermillion lembut, spinner angka disembunyikan, grain kertas washi via SVG feTurbulence (.washi-grain, opacity 0.032), animasi .entry-flash (wash vermillion saat entri baru muncul, respect prefers-reduced-motion), .font-kanji stack mincho+Noto Serif JP+fallback sistem.
+- Font (layout.tsx): Zen Kaku Gothic New 400/500/700 (--font-sans, body) + Zen Old Mincho 400/700 (--font-serif, judul/nama/bulan) via next/font; Noto Serif JP 600 di-load via CSS @import Google Fonts hanya untuk glyph kanji dekoratif; themeColor #f6f2e7; metadata judul "稽古日誌 — Log Latihan Teater".
+- page.tsx redesign: hanko seal persegi vermillion 稽古 di header + 稽古日誌 mincho + "LOG LATIHAN TEATER" micro-caps tracking lebar; tategaki vertikal 稽古日誌 di tepi kanan (lg+); kicker 今日の稽古 vermillion; h1 mincho; input underline (border-b) dengan fokus vermillion; kartu bg-card hairline rounded-[3px], nama aktor mincho bold; header bulan mincho + angka bulan kanji (9月) vermillion; empty state kanji 空; footer proverb 継続は力なり + terjemahan.
+- Form sesuai permintaan: label "Nama/Divisi" (placeholder "cth. Raka — Divisi Akting"), label "Durasi (jam)" — input jam desimal dengan koma, chips 0,5/1/1,5/2/3 jam; API tetap terima durationMenit (konversi client).
+- lib/panggung.ts: formatDuration kini berbasis jam ("45 mnt", "1,5 jam", "2 jam", "2 jam 5 mnt"); helper hoursToMinutes (parse koma/titik) & minutesToHoursInput.
+- Bug ditemukan & diperbaiki: input type="number" menelan koma ("1,25" jadi "125" → error 24 jam) — diganti type="text" inputMode="decimal" di form utama & form edit.
+- Fitur kecil baru: entri baru di-scroll-into-view + flash vermillion halus; form edit kini juga pakai jam dengan koma.
+- Verifikasi agent-browser (390px & 1280px): submit + foto → toast + feed + flash; "1,25" → "1 jam 15 mnt" di ringkasan/bulan/pekan/kartu; edit ubah 1,5→2 jam tersinkron semua level; tampilan edit "1,25" benar; salin ringkasan OK; hapus dua-langkah OK; console bersih; lint 0 masalah.
+- Data tes dibersihkan: DB kosong, public/uploads kosong.
+
+Stage Summary:
+- Desain terkunci: Jepang minimalis (washi/sumi/shu), font Zen Kaku Gothic New + Zen Old Mincho, kanji dekoratif via .font-kanji (jangan ganti ke font generik; jangan balik ke tema putih polos/dark amber).
+- Form: Nama/Divisi · Durasi (jam, koma desimal OK) · Apa yang dilatih · Catatan · Foto. API & skema TIDAK berubah (durationMenit int).
+- Kontrak API tetap: GET/POST /api/logs, PATCH/DELETE /api/logs/[id].
+- Ide kandidat ronde berikutnya: manifest PWA ringan + ikon hanko, tanggal backdate (link kecil "ubah tanggal"), ekspor ringkasan sebagai gambar.

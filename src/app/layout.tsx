@@ -1,10 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Zen_Kaku_Gothic_New, Zen_Old_Mincho } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const zenGothic = Zen_Kaku_Gothic_New({
+  variable: "--font-zen-gothic",
+  weight: ["400", "500", "700"],
+  subsets: ["latin"],
+});
+
+const zenMincho = Zen_Old_Mincho({
+  variable: "--font-zen-mincho",
+  weight: ["400", "700"],
   subsets: ["latin"],
 });
 
@@ -14,11 +21,11 @@ const geistMono = Geist_Mono({
 });
 
 export const viewport: Viewport = {
-  themeColor: "#fcfcfc",
+  themeColor: "#f6f2e7",
 };
 
 export const metadata: Metadata = {
-  title: "Log Latihan Teater",
+  title: "稽古日誌 — Log Latihan Teater",
   description:
     "Catat latihan teater hari ini — durasi, catatan, dan foto. Tampil rapi per pekan dan per bulan.",
 };
@@ -30,8 +37,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${zenGothic.variable} ${zenMincho.variable} ${geistMono.variable} antialiased`}
       >
         {children}
         <Toaster position="bottom-center" />
