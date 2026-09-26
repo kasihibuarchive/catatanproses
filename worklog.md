@@ -42,3 +42,23 @@ Stage Summary:
 - File dibuat/diubah: prisma/schema.prisma, src/app/api/logs/route.ts, src/app/api/logs/[id]/route.ts, src/app/globals.css, src/app/layout.tsx, src/app/page.tsx, src/lib/panggung.ts, src/components/panggung/log-card.tsx, src/components/panggung/log-form-dialog.tsx, src/components/panggung/stats-section.tsx, public/uploads/.gitkeep.
 - DB bersih (data uji dihapus) — pengguna baru melihat empty state "Belum ada log latihan".
 - Limitasi: tanggal disimpan midnight lokal server (aman untuk server & browser satu zona waktu; kontras TZ ekstrem bisa bergeser tampilan); foto disajikan via <img> statis dari /uploads (tidak ada CORS/optimasi Next Image); tidak ada auth sesuai spesifikasi ("Tanpa login").
+
+---
+Task ID: 2 (redesign) + 3 (verify/cleanup)
+Agent: main (Z.ai Code)
+Task: Redesign sesuai feedback user — "terlalu lengkap, bikin simpel dan minimalis, gausah milih kategori dsb, desainnya terlalu AI".
+
+Work Log:
+- Menyederhanakan skema PracticeLog: hapus kolom category, intensity, mood (db:push sukses).
+- Menyederhanakan API POST /api/logs: hanya actorName, title, durationMin, notes, image opsional; tanggal otomatis "hari ini" (server-side, local midnight).
+- Menulis ulang src/app/page.tsx jadi satu file minimal: form inline di atas halaman (bukan dialog), ringkasan "N sesi · X jam total", feed dikelompokkan bulan → pekan (dengan total per grup), kartu log simpel (nama, tanggal, durasi, judul, catatan, foto, tombol hapus dua-langkah tanpa modal).
+- Tema baru di globals.css: terang minimalis (putih, garis netral tipis, tombol hitam) — mengganti tema gelap amber; menghapus font Playfair, hero image AI, stats cards, chart, search, filter kategori, dialog, badge, mood, streak.
+- Menghapus file: src/components/panggung/{log-card,log-form-dialog,stats-section}.tsx, public/hero-stage.jpg.
+- Masalah dev server: pkill + nohup biasa tidak bertahan (dibunuh saat sesi bash berakhir); solusi yang bekerja: double-fork `(setsid bun run dev >> dev.log 2>&1 < /dev/null &)`.
+- Verifikasi agent-browser (desktop 1280 & mobile 390): form + upload foto → toast "Latihan tercatat.", feed grouping September/Agustus + pekan benar, hapus dua-langkah bekerja, localStorage prefill nama bekerja, lint 0 masalah, tidak ada console error.
+- Membersihkan semua data tes & file public/uploads/*.jpg.
+
+Stage Summary:
+- Aplikasi sekarang minimalis: form 5 field + foto, feed per bulan/pekan. DB bersih, siap dipakai user.
+- Kontrak API final: GET /api/logs, POST /api/logs (multipart: actorName, title, durationMin, notes, image), DELETE /api/logs/[id].
+- Catatan penting untuk agent berikutnya: JANGAN menambah kembali kompleksitas (kategori, dialog, chart, tema gelap) — user secara eksplisit meminta simpel & minimalis; pertahankan estetika terang yang bersih.

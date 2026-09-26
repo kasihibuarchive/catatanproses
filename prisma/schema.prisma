@@ -37,9 +37,6 @@ model PracticeLog {
   title       String
   date        DateTime
   durationMin Int
-  category    String
-  intensity   String   @default("Sedang")
-  mood        String   @default("🙂")
   notes       String   @default("")
   imagePath   String?
   createdAt   DateTime @default(now())

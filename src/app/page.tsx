@@ -1,35 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Camera,
-  Clapperboard,
-  Drama,
-  LogIn,
-  Plus,
-  Search,
-  Users,
-} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { LogCard } from "@/components/panggung/log-card";
-import { LogFormDialog } from "@/components/panggung/log-form-dialog";
-import { StatsSection } from "@/components/panggung/stats-section";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  CATEGORIES,
-  formatLogDuration,
+  ACTOR_NAME_STORAGE_KEY,
+  dateKey,
+  formatDuration,
   groupByMonthWeek,
   type PracticeLog,
 } from "@/lib/panggung";
@@ -38,19 +19,16 @@ export default function Page() {
   const [logs, setLogs] = useState<PracticeLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     setError(null);
     try {
       const res = await fetch("/api/logs", { cache: "no-store" });
-      if (!res.ok) throw new Error("Gagal memuat log latihan.");
+      if (!res.ok) throw new Error();
       const data = (await res.json()) as { logs: PracticeLog[] };
       setLogs(data.logs);
     } catch {
-      setError("Tidak bisa memuat log latihan. Periksa koneksi lalu coba lagi.");
+      setError("Tidak bisa memuat log. Coba lagi.");
     } finally {
       setLoading(false);
     }
@@ -60,291 +38,381 @@ export default function Page() {
     void refresh();
   }, [refresh]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return logs.filter((log) => {
-      if (categoryFilter !== "all" && log.category !== categoryFilter) return false;
-      if (!q) return true;
-      return (
-        log.actorName.toLowerCase().includes(q) ||
-        log.title.toLowerCase().includes(q) ||
-        log.notes.toLowerCase().includes(q)
-      );
-    });
-  }, [logs, search, categoryFilter]);
-
-  const groups = useMemo(() => groupByMonthWeek(filtered), [filtered]);
-
-  const handleDelete = useCallback(
-    async (log: PracticeLog) => {
-      try {
-        const res = await fetch(`/api/logs/${log.id}`, { method: "DELETE" });
-        if (!res.ok) {
-          const data = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(data?.error ?? "Gagal menghapus log.");
-        }
-        toast.success("Log dihapus.");
-        await refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Gagal menghapus log.");
-      }
-    },
-    [refresh]
-  );
-
-  const handleSubmitted = useCallback(
+  const handleCreated = useCallback(
     (log: PracticeLog) => {
       setLogs((prev) => [log, ...prev]);
-      void refresh();
     },
-    [refresh]
+    []
   );
 
-  const hasFilters = search.trim().length > 0 || categoryFilter !== "all";
+  const handleDeleted = useCallback((id: string) => {
+    setLogs((prev) => prev.filter((l) => l.id !== id));
+  }, []);
+
+  const totalMin = logs.reduce((sum, l) => sum + l.durationMin, 0);
+  const groups = groupByMonthWeek(logs);
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-background text-foreground">
-      {/* Subtle top spotlight */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-72"
-        style={{
-          background:
-            "radial-gradient(60% 100% at 50% 0%, oklch(0.8 0.16 80 / 0.12), transparent 70%)",
-        }}
-      />
-
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Drama className="size-5" aria-hidden="true" />
-            </div>
-            <div>
-              <p className="font-display text-lg font-bold leading-none">Panggung</p>
-              <p className="mt-1 text-[10px] font-medium uppercase leading-none tracking-widest text-muted-foreground">
-                Log Latihan Teater
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={() => setDialogOpen(true)}
-            className="h-11 w-11 p-0 sm:h-10 sm:w-auto sm:px-4"
-            aria-label="Catat Latihan"
-          >
-            <Plus className="size-5 sm:size-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Catat Latihan</span>
-          </Button>
+      <header className="border-b">
+        <div className="mx-auto flex h-14 w-full max-w-2xl items-center justify-between px-5">
+          <p className="text-sm font-semibold tracking-tight">Log Latihan Teater</p>
+          <p className="text-xs text-muted-foreground">hari ini</p>
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4">
-        {/* Hero */}
-        <section
-          className="relative -mx-4 mb-4 overflow-hidden text-center"
-          aria-label="Tentang Panggung"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            alt="Panggung teater kosong dengan sorotan lampu emas di antara tirai merah"
-            className="absolute inset-0 h-full w-full object-cover opacity-55"
-          />
-          {/* Blend overlays: fade image into page background top & bottom */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-gradient-to-b from-background via-background/60 to-background"
-          />
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,oklch(0.16_0.01_60/0.55)_100%)]"
-          />
-          <div className="relative px-4 py-14 md:py-20">
-            <Badge
-              variant="outline"
-              className="mb-5 gap-1.5 border-primary/40 bg-primary/10 text-primary"
-            >
-              <Drama className="size-3.5" aria-hidden="true" />
-              Log latihan untuk komunitas teater
-            </Badge>
-            <h1 className="font-display text-3xl font-bold drop-shadow-[0_2px_12px_oklch(0.1_0_0/0.8)] md:text-5xl">
-              Setiap latihan, satu langkah ke{" "}
-              <span className="text-primary">panggung</span>.
-            </h1>
-            <p className="mx-auto mt-4 max-w-2xl text-foreground/80 md:text-lg">
-              Seperti Strava untuk teater — catat durasi, kesulitan, catatan, dan foto
-              latihanmu hari ini.
-            </p>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-              <Badge variant="outline" className="gap-1.5 bg-background/60 backdrop-blur-sm">
-                <LogIn className="size-3.5" aria-hidden="true" />
-                Tanpa login
-              </Badge>
-              <Badge variant="outline" className="gap-1.5 bg-background/60 backdrop-blur-sm">
-                <Camera className="size-3.5" aria-hidden="true" />
-                Fotografis
-              </Badge>
-              <Badge variant="outline" className="gap-1.5 bg-background/60 backdrop-blur-sm">
-                <Users className="size-3.5" aria-hidden="true" />
-                Kolektif
-              </Badge>
-            </div>
-          </div>
-        </section>
+      <main className="mx-auto w-full max-w-2xl flex-1 px-5">
+        {/* Form */}
+        <LogForm onCreated={handleCreated} />
 
-        {/* Stats */}
-        <StatsSection logs={logs} />
+        {/* Summary */}
+        {!loading && !error && logs.length > 0 && (
+          <p className="mb-6 text-sm text-muted-foreground">
+            {logs.length} sesi · {formatDuration(totalMin)} total
+          </p>
+        )}
 
         {/* Feed */}
-        <section className="flex flex-col gap-4 pb-16 pt-10" aria-label="Log latihan">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <h2 className="font-display text-2xl font-bold">Log Latihan</h2>
-              <Badge variant="secondary" aria-label={`${filtered.length} log`}>
-                {filtered.length}
-              </Badge>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative flex-1">
-                <Search
-                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Cari nama, judul, atau catatan…"
-                  className="h-11 pl-9"
-                  aria-label="Cari log latihan"
-                />
-              </div>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger
-                  className="h-11 w-full sm:w-56"
-                  aria-label="Filter kategori"
-                >
-                  <SelectValue placeholder="Semua Kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Kategori</SelectItem>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c.name} value={c.name}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        {loading ? (
+          <div className="space-y-3 pb-16">
+            <div className="h-5 w-40 rounded bg-muted" />
+            <div className="h-24 rounded-lg border" />
+            <div className="h-24 rounded-lg border" />
           </div>
-
-          {loading ? (
-            <div className="flex flex-col gap-4">
-              {[0, 1, 2].map((i) => (
-                <Card key={i} className="p-5">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="size-10 rounded-full" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-1/3" />
-                      <Skeleton className="h-3 w-1/4" />
-                    </div>
-                  </div>
-                  <Skeleton className="mt-4 h-5 w-2/3" />
-                  <Skeleton className="mt-3 h-4 w-full" />
-                  <Skeleton className="mt-2 h-4 w-3/4" />
-                </Card>
-              ))}
-            </div>
-          ) : error ? (
-            <Card className="p-10 text-center">
-              <CardContent className="flex flex-col items-center gap-3 p-0">
-                <Clapperboard className="size-10 text-muted-foreground" aria-hidden="true" />
-                <p className="text-sm text-muted-foreground">{error}</p>
-                <Button onClick={() => void refresh()}>Coba Lagi</Button>
-              </CardContent>
-            </Card>
-          ) : logs.length === 0 ? (
-            <Card className="py-16 text-center">
-              <CardContent className="flex flex-col items-center gap-3 p-4">
-                <Drama className="size-12 text-muted-foreground" aria-hidden="true" />
-                <p className="font-display text-xl font-semibold">
-                  Belum ada log latihan
-                </p>
-                <p className="max-w-md text-sm text-muted-foreground">
-                  Jadilah yang pertama mencatat latihan hari ini — seperti membuka
-                  tiras panggung 🎭
-                </p>
-                <Button className="mt-2" onClick={() => setDialogOpen(true)}>
-                  <Plus className="size-4" aria-hidden="true" />
-                  Catat Latihan Pertama
-                </Button>
-              </CardContent>
-            </Card>
-          ) : filtered.length === 0 ? (
-            <Card className="py-10 text-center">
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">
-                  Tidak ada log yang cocok dengan pencarian.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="flex flex-col gap-6">
-              {groups.map((month) => (
-                <div key={month.key} className="flex flex-col gap-4">
-                  <div className="sticky top-16 z-30 -mx-4 flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
-                    <h3 className="font-display text-lg font-semibold">
-                      {month.label}
-                    </h3>
-                    <span className="text-sm text-muted-foreground">
-                      {formatLogDuration(month.totalMin)}
-                    </span>
-                  </div>
-
-                  {month.weeks.map((week) => (
-                    <div key={week.key} className="flex flex-col gap-3">
-                      <div className="flex items-center justify-between pt-1">
-                        <p className="text-sm font-medium">{week.label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {week.logs.length} sesi · total{" "}
-                          {formatLogDuration(week.totalMin)}
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-4">
-                        {week.logs.map((log) => (
-                          <LogCard key={log.id} log={log} onDelete={handleDelete} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {hasFilters && !loading && !error && logs.length > 0 && (
-            <p className="sr-only" aria-live="polite">
-              {filtered.length} log cocok dengan filter.
+        ) : error ? (
+          <div className="pb-16 text-sm text-muted-foreground">
+            <p>{error}</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => void refresh()}>
+              Coba lagi
+            </Button>
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="pb-20">
+            <p className="text-sm font-medium">Belum ada catatan.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Isi form di atas untuk mencatat latihan pertamamu.
             </p>
-          )}
-        </section>
+          </div>
+        ) : (
+          <div className="space-y-8 pb-16">
+            {groups.map((month) => (
+              <section key={month.key}>
+                <div className="flex items-baseline justify-between border-b pb-2">
+                  <h2 className="text-sm font-semibold">{month.label}</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDuration(month.totalMin)}
+                  </p>
+                </div>
+                {month.weeks.map((week) => (
+                  <div key={week.key} className="mt-4">
+                    <p className="text-xs text-muted-foreground">
+                      {week.range} · {formatDuration(week.totalMin)}
+                    </p>
+                    <ul className="mt-2 space-y-2">
+                      {week.logs.map((log) => (
+                        <LogRow key={log.id} log={log} onDeleted={handleDeleted} />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </section>
+            ))}
+          </div>
+        )}
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 mt-auto border-t bg-background/80 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center backdrop-blur">
-        <p className="text-sm text-muted-foreground">
-          Panggung 🎭 — catat latihanmu, rayakan progresmu.
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground/70">
-          Data tersimpan lokal di perangkat server ini.
-        </p>
+      <footer className="mt-auto border-t">
+        <div className="mx-auto w-full max-w-2xl px-5 py-5">
+          <p className="text-xs text-muted-foreground">
+            Catat latihan, lihat perkembangannya dari pekan ke pekan.
+          </p>
+        </div>
       </footer>
-
-      <LogFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSubmitted={handleSubmitted}
-      />
     </div>
   );
+}
+
+/* ---------- Form ---------- */
+
+function LogForm({ onCreated }: { onCreated: (log: PracticeLog) => void }) {
+  const [actorName, setActorName] = useState("");
+  const [title, setTitle] = useState("");
+  const [durationMin, setDurationMin] = useState("");
+  const [notes, setNotes] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Prefill name from localStorage (client only).
+  useEffect(() => {
+    const saved = window.localStorage.getItem(ACTOR_NAME_STORAGE_KEY);
+    if (saved) setActorName(saved);
+  }, []);
+
+  const pickPhoto = (file: File | null) => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhoto(file);
+    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  const reset = (keepName: boolean) => {
+    if (!keepName) setActorName("");
+    setTitle("");
+    setDurationMin("");
+    setNotes("");
+    pickPhoto(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFieldError(null);
+
+    if (!actorName.trim()) return setFieldError("Isi nama dulu ya.");
+    if (!title.trim()) return setFieldError("Tulis apa yang dilatih hari ini.");
+    const duration = Number(durationMin);
+    if (!durationMin || Number.isNaN(duration) || duration < 1) {
+      return setFieldError("Isi durasi latihan (menit).");
+    }
+
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.set("actorName", actorName.trim());
+      fd.set("title", title.trim());
+      fd.set("durationMin", String(Math.round(duration)));
+      fd.set("notes", notes.trim());
+
+      let file: File | null = photo;
+      if (file) {
+        // Downscale in the browser so uploads stay small.
+        file = await downscaleImage(file);
+        if (file) fd.set("image", file);
+      }
+
+      const res = await fetch("/api/logs", { method: "POST", body: fd });
+      const data = (await res.json().catch(() => null)) as
+        | { log?: PracticeLog; error?: string }
+        | null;
+
+      if (!res.ok || !data?.log) {
+        throw new Error(data?.error ?? "Gagal menyimpan. Coba lagi.");
+      }
+
+      window.localStorage.setItem(ACTOR_NAME_STORAGE_KEY, actorName.trim());
+      onCreated(data.log);
+      reset(true);
+      toast.success("Latihan tercatat.");
+    } catch (err) {
+      setFieldError(err instanceof Error ? err.message : "Gagal menyimpan. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="py-8" noValidate>
+      <h1 className="text-lg font-semibold tracking-tight">Catat latihan hari ini</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Isi detilnya, tambahkan foto kalau ada, lalu kirim.
+      </p>
+
+      <div className="mt-5 space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="actorName">Nama</Label>
+            <Input
+              id="actorName"
+              value={actorName}
+              onChange={(e) => setActorName(e.target.value)}
+              placeholder="Namamu atau nama kelompok"
+              autoComplete="name"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="durationMin">Durasi (menit)</Label>
+            <Input
+              id="durationMin"
+              type="number"
+              min={1}
+              max={1440}
+              inputMode="numeric"
+              value={durationMin}
+              onChange={(e) => setDurationMin(e.target.value)}
+              placeholder="90"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="title">Apa yang dilatih?</Label>
+          <Input
+            id="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="cth. Latihan bloking adegan 3"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="notes">Catatan (opsional)</Label>
+          <Textarea
+            id="notes"
+            rows={3}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Yang sulit, yang menemukan, catatan sutradara…"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            aria-label="Pilih foto latihan"
+            onChange={(e) => pickPhoto(e.target.files?.[0] ?? null)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileRef.current?.click()}
+          >
+            {photo ? "Ganti foto" : "Tambah foto"}
+          </Button>
+          {photoPreview && (
+            <div className="flex items-center gap-2">
+              <img
+                src={photoPreview}
+                alt="Pratinjau foto latihan"
+                className="size-12 rounded-md border object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  pickPhoto(null);
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                buang
+              </button>
+            </div>
+          )}
+        </div>
+
+        {fieldError && <p className="text-sm text-destructive">{fieldError}</p>}
+
+        <Button type="submit" disabled={submitting} className="w-full sm:w-auto sm:min-w-32">
+          {submitting ? "Mengirim…" : "Kirim"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/* ---------- Log row ---------- */
+
+function LogRow({
+  log,
+  onDeleted,
+}: {
+  log: PracticeLog;
+  onDeleted: (id: string) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  const remove = async () => {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/logs/${log.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      onDeleted(log.id);
+      toast.success("Catatan dihapus.");
+    } catch {
+      toast.error("Gagal menghapus. Coba lagi.");
+      setConfirming(false);
+    }
+  };
+
+  const d = new Date(`${dateKey(log.date)}T00:00:00`);
+  const dateLabel = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+
+  return (
+    <li className="rounded-lg border p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-sm font-semibold">{log.actorName}</p>
+        <p className="shrink-0 text-xs text-muted-foreground">
+          {dateLabel} · {formatDuration(log.durationMin)}
+        </p>
+      </div>
+      <p className="mt-1 text-sm">{log.title}</p>
+      {log.notes && (
+        <p className="mt-1.5 whitespace-pre-line text-sm text-muted-foreground">
+          {log.notes}
+        </p>
+      )}
+      {log.imagePath && (
+        <a href={log.imagePath} target="_blank" rel="noreferrer" className="mt-3 block">
+          <img
+            src={log.imagePath}
+            alt={`Foto latihan ${log.title}`}
+            loading="lazy"
+            className="max-h-80 w-full rounded-md border object-cover"
+          />
+        </a>
+      )}
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={remove}
+          onBlur={() => setConfirming(false)}
+          className={`text-xs underline underline-offset-2 ${
+            confirming ? "text-destructive" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {confirming ? "yakin? klik lagi" : "hapus"}
+        </button>
+      </div>
+    </li>
+  );
+}
+
+/* ---------- Image helper ---------- */
+
+/** Downscale to max 1600px JPEG 0.85 in the browser. Returns null on failure. */
+async function downscaleImage(file: File): Promise<File | null> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.85)
+    );
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", {
+      type: "image/jpeg",
+    });
+  } catch {
+    return file; // fall back to the original file
+  }
 }

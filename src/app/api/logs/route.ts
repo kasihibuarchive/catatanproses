@@ -9,43 +9,19 @@ import { db } from "@/lib/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CATEGORIES = [
-  "Akting",
-  "Vokal & Musik",
-  "Gerak & Tari",
-  "Improvisasi",
-  "Baca Naskah",
-  "Teknis & Panggung",
-  "Observasi",
-  "Lainnya",
-] as const;
-
-const INTENSITIES = ["Rendah", "Sedang", "Tinggi"] as const;
-
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
 
 const logSchema = z.object({
   actorName: z
     .string()
     .trim()
-    .min(1, "Nama aktor/kelompok wajib diisi.")
-    .max(60, "Nama aktor/kelompok maksimal 60 karakter."),
+    .min(1, "Nama wajib diisi.")
+    .max(60, "Nama maksimal 60 karakter."),
   title: z
     .string()
     .trim()
     .min(1, "Judul latihan wajib diisi.")
     .max(120, "Judul latihan maksimal 120 karakter."),
-  date: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal harus dalam format YYYY-MM-DD.")
-    .refine((value) => {
-      const [y, m, d] = value.split("-").map(Number);
-      const dt = new Date(y, m - 1, d);
-      return (
-        dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d
-      );
-    }, "Tanggal tidak valid."),
   durationMin: z.preprocess(
     (v) => {
       if (v === undefined || v === null || v === "") return undefined;
@@ -58,27 +34,8 @@ const logSchema = z.object({
       .min(1, "Durasi minimal 1 menit.")
       .max(1440, "Durasi maksimal 1440 menit (24 jam).")
   ),
-  category: z.enum(CATEGORIES, {
-    error: "Kategori tidak valid.",
-  }),
-  intensity: z
-    .enum(INTENSITIES, { error: "Intensitas tidak valid." })
-    .default("Sedang"),
-  mood: z
-    .string()
-    .max(8, "Mood tidak valid.")
-    .default("🙂"),
-  notes: z
-    .string()
-    .max(2000, "Catatan maksimal 2000 karakter.")
-    .default(""),
+  notes: z.string().max(2000, "Catatan maksimal 2000 karakter.").default(""),
 });
-
-/** Parse "YYYY-MM-DD" into a local Date (midnight, local time) — avoids timezone shifts. */
-function parseLocalDate(value: string): Date {
-  const [y, m, d] = value.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
 
 function getString(form: FormData, key: string): string | null {
   const value = form.get(key);
@@ -114,12 +71,8 @@ export async function POST(req: Request) {
   const parsed = logSchema.safeParse({
     actorName: getString(form, "actorName") ?? "",
     title: getString(form, "title") ?? "",
-    date: getString(form, "date") ?? "",
     durationMin: getString(form, "durationMin") ?? "",
-    category: getString(form, "category") ?? "",
-    intensity: getString(form, "intensity") || undefined,
-    mood: getString(form, "mood") || undefined,
-    notes: getString(form, "notes") || undefined,
+    notes: getString(form, "notes") ?? "",
   });
 
   if (!parsed.success) {
@@ -128,8 +81,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const { actorName, title, date, durationMin, category, intensity, mood, notes } =
-    parsed.data;
+  const { actorName, title, durationMin, notes } = parsed.data;
+
+  // Date is always "today" (local midnight).
+  const now = new Date();
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   // --- Optional image handling ---
   let imagePath: string | null = null;
@@ -177,11 +133,8 @@ export async function POST(req: Request) {
       data: {
         actorName,
         title,
-        date: parseLocalDate(date),
+        date,
         durationMin,
-        category,
-        intensity,
-        mood,
         notes,
         imagePath,
       },
