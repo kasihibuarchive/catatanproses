@@ -207,3 +207,29 @@ Stage Summary:
 - Fitur aktif kini: catat hari ini/backdate + kicker kanji dinamis, pakai-lagi (prefill dari latihan terakhir), feed bulan→pekan (double-rule, count orang), salin ringkasan + bagikan WhatsApp, ubah inline, hapus dua-langkah, foto ala cetakan album, PWA hanko, OG card, footer ↑ atas.
 - Prinsip desain tetap terkunci: washi/sumi/shu, Zen fonts, .font-kanji, hairline borders, link teks kecil lowercase — tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
 - Ide kandidat ronde berikutnya: service worker offline ringan, ekspor ringkasan sebagai gambar (canvas), label kecil jumlah foto per bulan — tetap minimum dan konsisten estetika.
+
+---
+Task ID: cron-review-7
+Agent: main (Z.ai Code, webDevReview cron)
+Task: QA rutin + pengembangan lanjutan (desain Jepang minimalis terkunci).
+
+Work Log:
+- QA awal: server hidup, DB bersih, console bersih; smoke test submit → feed OK.
+- Fitur baru — EKSPOR RINGKASAN BULAN SEBAGAI GAMBAR (link kecil "gambar" di header bulan, samping "salin"):
+  - src/lib/summary-image.ts (baru): renderMonthSummaryBlob(month) — canvas 1080px lebar, poster washi: 稽古日誌 mincho + 9月 vermillion, eyebrow "LOG LATIHAN TEATER" letterspaced, double-rule shu, baris stats "N sesi · X jam · M orang · K foto", ledger per pekan (range bold + durasi kanan) dengan bullet vermillion per orang, footer 継続は力なり + hanko 稽古 miring -3°.
+  - Font canvas di-resolve runtime dari CSS var (--font-zen-mincho/--font-zen-gothic di body) + fallback "Noto Serif JP"; document.fonts.load() eksplisit dengan teks kanji sebelum menggambar (subset latin Zen fonts tidak memuat kanji — kanji jatuh ke Noto Serif JP 600).
+  - Warna diambil dari token CSS asli (oklch didukung canvas Chromium).
+  - Tinggi poster ADAPTIF: bulan pendek → 1080x1080 (persegi), bulan penuh tumbuh alami; whitespace surplus dibagi 70% ke jeda antar-pekan (cap 90px) + 30% ke jeda footer (cap 260px). Bug saat pertama: floor MIN_HEIGHT di dalam fungsi layoutHeight membuat cabang stretch tak pernah jalan (natural selalu = MIN) — diperbaiki dengan rawHeight() terpisah.
+  - Nama panjang di-clamp dengan "…" via measureText; unduh sebagai kekiro-YYYY-MM.png + toast; console.debug ukuran blob untuk QA.
+  - Terverifikasi visual: PNG 1-pekan & 2-pekan (136 KB) — komposisi seimbang, kanji tajam, hanko benar.
+- Fitur kecil — KANJI HARI di tiap entri: 土/月/火… kecil (text-[11px], text-seal/75, font-kanji, aria-hidden) sebelum label tanggal; terverifikasi 土=Sabtu, 木=Kamis 17 Sep.
+- Fitur kecil — HITUNGAN FOTO per bulan di header: "3 sesi · 3 orang · 1 foto" (hanya jika >0). Helper baru di lib: monthSessionCount, monthActorCount, monthPhotoCount (buildMonthSummary di-refactor memakainya — TEKS clipboard & WhatsApp TIDAK berubah, terverifikasi via decode href).
+- Detail styling: container header bulan kini flex-wrap (gap-y-1) — di mobile 390px baris aksi turun rapi ke baris kedua "5 jam · whatsapp · salin · gambar", desktop 1280 tetap satu baris.
+- Verifikasi: E2E 3 entri (2 orang, 2 pekan, 1 foto) → header/ledger/unduhan benar; console fresh-load tanpa warning (metadataBase lama hanyalah buffer); lint 0 masalah; data tes dihapus (DB 0 baris, uploads kosong, localStorage nama tes dibersihkan).
+
+Stage Summary:
+- Tidak ada perubahan API/skema. Kontrak tetap: GET/POST /api/logs (+date opsional), PATCH/DELETE /api/logs/[id]; durationMin tetap menit.
+- File baru: src/lib/summary-image.ts (client-only, dipanggil saat klik — aman SSR).
+- Fitur aktif kini: catat hari ini/backdate + kicker kanji dinamis, pakai-lagi, feed bulan→pekan (double-rule, count orang+foto), salin ringkasan + WhatsApp + GAMBAR PNG, ubah inline, hapus dua-langkah, foto ala cetakan album, kanji hari per entri, PWA hanko, OG card, footer ↑ atas.
+- Prinsip desain tetap terkunci: washi/sumi/shu, Zen fonts, .font-kanji, hairline borders, link teks kecil lowercase — tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
+- Ide kandidat ronde berikutnya: service worker offline ringan; indikator kecil "hari ini" pada strip kalender mini per pekan (opsional); penyimpanan filter? TIDAK — jaga tetap minimum; paling layak: SW offline + polish a11y fokus saat edit.

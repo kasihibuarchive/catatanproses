@@ -15,10 +15,15 @@ import {
   groupByMonthWeek,
   hoursToMinutes,
   minutesToHoursInput,
+  monthActorCount,
+  monthPhotoCount,
+  monthSessionCount,
   toDateKey,
+  WEEKDAY_KANJI,
   type MonthGroup,
   type PracticeLog,
 } from "@/lib/panggung";
+import { renderMonthSummaryBlob } from "@/lib/summary-image";
 
 /** Quiet lowercase text-link used for all small actions. */
 const textLink =
@@ -162,23 +167,22 @@ export default function Page() {
         ) : (
           <div className="space-y-10 pb-16">
             {groups.map((month) => {
-              const actorCount = new Set(
-                month.weeks.flatMap((w) =>
-                  w.logs.map((l) => l.actorName.trim().toLowerCase())
-                )
-              ).size;
+              const sessions = monthSessionCount(month);
+              const people = monthActorCount(month);
+              const photos = monthPhotoCount(month);
               return (
                 <section key={month.key}>
                   {/* thick-thin double rule, Showa print style */}
-                  <div className="flex items-baseline justify-between gap-3 border-b-[3px] border-double border-foreground/25 pb-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b-[3px] border-double border-foreground/25 pb-2">
                     <h2 className="font-serif text-base tracking-wide">
                       {month.label}
                       <span aria-hidden className="font-kanji ml-2 text-xs text-seal">
                         {Number(month.key.split("-")[1])}月
                       </span>
                       <span className="ml-2 text-xs font-sans font-normal tabular-nums text-muted-foreground">
-                        {month.weeks.reduce((n, w) => n + w.logs.length, 0)} sesi
-                        {actorCount > 1 ? ` · ${actorCount} orang` : ""}
+                        {sessions} sesi
+                        {people > 1 ? ` · ${people} orang` : ""}
+                        {photos > 0 ? ` · ${photos} foto` : ""}
                       </span>
                     </h2>
                     <div className="flex shrink-0 items-baseline gap-3">
@@ -188,6 +192,8 @@ export default function Page() {
                       <ShareMonthLink month={month} />
                       <span aria-hidden className="text-foreground/20">·</span>
                       <CopyMonthButton month={month} />
+                      <span aria-hidden className="text-foreground/20">·</span>
+                      <DownloadMonthImage month={month} />
                     </div>
                   </div>
                   {month.weeks.map((week) => (
@@ -259,6 +265,37 @@ function ShareMonthLink({ month }: { month: MonthGroup }) {
     >
       whatsapp
     </a>
+  );
+}
+
+/** Quiet link that renders the month recap as a washi PNG poster and downloads it. */
+function DownloadMonthImage({ month }: { month: MonthGroup }) {
+  const [busy, setBusy] = useState(false);
+
+  const download = async () => {
+    setBusy(true);
+    try {
+      const blob = await renderMonthSummaryBlob(month);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `kekiro-${month.key}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast.success("Gambar ringkasan diunduh.");
+    } catch {
+      toast.error("Gagal membuat gambar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button type="button" onClick={download} disabled={busy} className={textLink}>
+      {busy ? "menyiapkan…" : "gambar"}
+    </button>
   );
 }
 
@@ -712,6 +749,7 @@ function LogRow({
       day: "numeric",
       month: "short",
     });
+  const weekday = WEEKDAY_KANJI[new Date(`${day}T00:00:00`).getDay()];
 
   if (editing) {
     return (
@@ -781,6 +819,9 @@ function LogRow({
       <div className="flex items-baseline justify-between gap-3">
         <p className="font-serif text-sm font-bold">{log.actorName}</p>
         <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          <span aria-hidden className="font-kanji mr-1.5 text-[11px] text-seal/75">
+            {weekday}
+          </span>
           {dayLabel} · {formatDuration(log.durationMin)}
         </p>
       </div>

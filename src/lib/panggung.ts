@@ -120,12 +120,27 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** Plain-text recap of one month, ready to paste into a chat. */
-export function buildMonthSummary(month: MonthGroup): string {
-  const totalSessions = month.weeks.reduce((n, w) => n + w.logs.length, 0);
-  const actorCount = new Set(
+/** Weekday kanji (Sun..Sat) for the small date accents on each entry. */
+export const WEEKDAY_KANJI = ["日", "月", "火", "水", "木", "金", "土"] as const;
+
+export function monthSessionCount(month: MonthGroup): number {
+  return month.weeks.reduce((n, w) => n + w.logs.length, 0);
+}
+
+export function monthActorCount(month: MonthGroup): number {
+  return new Set(
     month.weeks.flatMap((w) => w.logs.map((l) => l.actorName.trim().toLowerCase()))
   ).size;
+}
+
+export function monthPhotoCount(month: MonthGroup): number {
+  return month.weeks.reduce((n, w) => n + w.logs.filter((l) => l.imagePath).length, 0);
+}
+
+/** Plain-text recap of one month, ready to paste into a chat. */
+export function buildMonthSummary(month: MonthGroup): string {
+  const totalSessions = monthSessionCount(month);
+  const actorCount = monthActorCount(month);
   const lines: string[] = [
     `Log Latihan — ${month.label}`,
     `Total: ${totalSessions} sesi · ${formatDuration(month.totalMin)}${
