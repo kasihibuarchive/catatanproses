@@ -159,3 +159,27 @@ Stage Summary:
 - Fitur aktif: catat hari ini/backdate (form + kanji kicker dinamis), feed bulan→pekan terurut benar, salin ringkasan, ubah inline, hapus dua-langkah, PWA installable (ikon hanko 稽古), label hari relatif.
 - Prinsip desain tetap terkunci: washi/sumi/shu, Zen fonts, .font-kanji, hairline borders, link teks kecil lowercase — tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
 - Ide kandidat ronde berikutnya: service worker offline ringan (opsional), halaman/komponen statistik per orang yang sangat kecil (jika diminta user), meta OG image hanko.
+
+---
+Task ID: cron-review-5
+Agent: main (Z.ai Code, webDevReview cron)
+Task: QA rutin + pengembangan lanjutan (desain Jepang minimalis terkunci).
+
+Work Log:
+- QA awal: server hidup, DB bersih, lint bersih, console bersih.
+- Fitur baru — OG SHARE CARD:
+  - scripts/gen-og.mjs: render og-image.png 1200x630 via sharp+SVG (IPAGothic untuk kanji, Liberation Sans untuk latin) — washi cream, judul 稽古日誌 sumi ink, rule vermillion, hanko 稽古 ber-frame di kanan, proverb 継続は力なり.
+  - layout.tsx: metadata openGraph (og:title/description/image 1200x630, type website) + twitter card summary_large_image. Terverifikasi: og:title & og:image muncul di HTML, /og-image.png 200.
+- Fitur baru — HITUNGAN ORANG:
+  - Header bulan: "N sesi · M orang" (nama unik case-insensitive per bulan; M hanya tampil jika >1).
+  - buildMonthSummary: baris Total kini "N sesi · X jam · M orang" — diverifikasi via stub clipboard: "Total: 2 sesi · 2,5 jam · 2 orang".
+- Detail styling:
+  - Header bulan kini memakai double-rule tebal-tipis (border-b-[3px] border-double, ala cetakan Showa) — membedakan hierarki bulan dari hairline biasa.
+  - aria-live="polite" pada baris ringkasan total (screen reader mendengar update setelah kirim/hapus).
+- Verifikasi: E2E dua entri nama berbeda → "2 sesi · 2 orang" di header, salin berisi per-orang per-pekan; desktop 1280 double-rule + tategaki + footer rapi; console & lint bersih; data tes dihapus (DB & uploads kosong).
+
+Stage Summary:
+- Tidak ada perubahan API/skema. Kontrak tetap: GET/POST /api/logs (+date opsional), PATCH/DELETE /api/logs/[id].
+- Aset publik baru: /og-image.png (regenerate dengan `bun scripts/gen-og.mjs` jika perlu ubah teks); ikon dari gen-icon.mjs.
+- Fitur aktif kini: catat hari ini/backdate + kicker kanji dinamis, feed bulan→pekan (double-rule, count orang), salin ringkasan bulan (dengan count orang), ubah inline, hapus dua-langkah, PWA hanko, OG card untuk share WhatsApp/Line.
+- Ide kandidat ronde berikutnya: service worker offline ringan, tombol "pakai catatan terakhir" untuk latihan berulang, filter berbagi ringkasan per-pekan via WhatsApp (wa.me) — opsi, tetap minimum.

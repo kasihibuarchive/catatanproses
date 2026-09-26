@@ -41,6 +41,20 @@ export const metadata: Metadata = {
     title: "稽古日誌",
     statusBarStyle: "default",
   },
+  openGraph: {
+    title: "稽古日誌 — Log Latihan Teater",
+    description:
+      "Catat latihan teater hari ini — durasi, catatan, dan foto. Tampil rapi per pekan dan per bulan.",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "稽古日誌 — Log Latihan Teater" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "稽古日誌 — Log Latihan Teater",
+    description:
+      "Catat latihan teater hari ini — durasi, catatan, dan foto. Tampil rapi per pekan dan per bulan.",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({

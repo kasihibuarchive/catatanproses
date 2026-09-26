@@ -123,9 +123,14 @@ function capitalize(text: string): string {
 /** Plain-text recap of one month, ready to paste into a chat. */
 export function buildMonthSummary(month: MonthGroup): string {
   const totalSessions = month.weeks.reduce((n, w) => n + w.logs.length, 0);
+  const actorCount = new Set(
+    month.weeks.flatMap((w) => w.logs.map((l) => l.actorName.trim().toLowerCase()))
+  ).size;
   const lines: string[] = [
     `Log Latihan — ${month.label}`,
-    `Total: ${totalSessions} sesi · ${formatDuration(month.totalMin)}`,
+    `Total: ${totalSessions} sesi · ${formatDuration(month.totalMin)}${
+      actorCount > 1 ? ` · ${actorCount} orang` : ""
+    }`,
   ];
 
   for (const week of month.weeks) {

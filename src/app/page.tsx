@@ -130,7 +130,7 @@ export default function Page() {
 
         {/* Summary */}
         {!loading && !error && logs.length > 0 && (
-          <p className="mb-6 text-sm tabular-nums text-muted-foreground">
+          <p aria-live="polite" className="mb-6 text-sm tabular-nums text-muted-foreground">
             {logs.length} sesi · {formatDuration(totalMin)} total
           </p>
         )}
@@ -161,45 +161,54 @@ export default function Page() {
           </div>
         ) : (
           <div className="space-y-10 pb-16">
-            {groups.map((month) => (
-              <section key={month.key}>
-                <div className="flex items-baseline justify-between gap-3 border-b border-foreground/15 pb-2">
-                  <h2 className="font-serif text-base tracking-wide">
-                    {month.label}
-                    <span aria-hidden className="font-kanji ml-2 text-xs text-seal">
-                      {Number(month.key.split("-")[1])}月
-                    </span>
-                    <span className="ml-2 text-xs font-sans font-normal tabular-nums text-muted-foreground">
-                      {month.weeks.reduce((n, w) => n + w.logs.length, 0)} sesi
-                    </span>
-                  </h2>
-                  <div className="flex shrink-0 items-baseline gap-3">
-                    <p className="text-xs tabular-nums text-muted-foreground">
-                      {formatDuration(month.totalMin)}
-                    </p>
-                    <CopyMonthButton month={month} />
+            {groups.map((month) => {
+              const actorCount = new Set(
+                month.weeks.flatMap((w) =>
+                  w.logs.map((l) => l.actorName.trim().toLowerCase())
+                )
+              ).size;
+              return (
+                <section key={month.key}>
+                  {/* thick-thin double rule, Showa print style */}
+                  <div className="flex items-baseline justify-between gap-3 border-b-[3px] border-double border-foreground/25 pb-2">
+                    <h2 className="font-serif text-base tracking-wide">
+                      {month.label}
+                      <span aria-hidden className="font-kanji ml-2 text-xs text-seal">
+                        {Number(month.key.split("-")[1])}月
+                      </span>
+                      <span className="ml-2 text-xs font-sans font-normal tabular-nums text-muted-foreground">
+                        {month.weeks.reduce((n, w) => n + w.logs.length, 0)} sesi
+                        {actorCount > 1 ? ` · ${actorCount} orang` : ""}
+                      </span>
+                    </h2>
+                    <div className="flex shrink-0 items-baseline gap-3">
+                      <p className="text-xs tabular-nums text-muted-foreground">
+                        {formatDuration(month.totalMin)}
+                      </p>
+                      <CopyMonthButton month={month} />
+                    </div>
                   </div>
-                </div>
-                {month.weeks.map((week) => (
-                  <div key={week.key} className="mt-5">
-                    <p className="text-xs tracking-wide text-muted-foreground">
-                      {week.range} · {formatDuration(week.totalMin)}
-                    </p>
-                    <ul className="mt-2 space-y-2">
-                      {week.logs.map((log) => (
-                        <LogRow
-                          key={log.id}
-                          log={log}
-                          justAdded={log.id === justAddedId}
-                          onDeleted={handleDeleted}
-                          onUpdated={handleUpdated}
-                        />
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </section>
-            ))}
+                  {month.weeks.map((week) => (
+                    <div key={week.key} className="mt-5">
+                      <p className="text-xs tracking-wide text-muted-foreground">
+                        {week.range} · {formatDuration(week.totalMin)}
+                      </p>
+                      <ul className="mt-2 space-y-2">
+                        {week.logs.map((log) => (
+                          <LogRow
+                            key={log.id}
+                            log={log}
+                            justAdded={log.id === justAddedId}
+                            onDeleted={handleDeleted}
+                            onUpdated={handleUpdated}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </section>
+              );
+            })}
           </div>
         )}
       </main>
