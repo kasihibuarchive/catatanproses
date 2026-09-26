@@ -644,7 +644,7 @@ function LogForm({
               id="actorName"
               value={actorName}
               onChange={(e) => setActorName(e.target.value)}
-              placeholder="cth. Raka — Divisi Akting"
+              placeholder="cth. Bana — divisi sound"
               autoComplete="name"
               className={underlineInput}
             />
@@ -695,11 +695,11 @@ function LogForm({
           <Label htmlFor="notes">Catatan (opsional)</Label>
           <Textarea
             id="notes"
-            rows={3}
+            rows={6}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Yang sulit, yang menemukan, catatan sutradara…"
-            className="min-h-20 w-full resize-y rounded-[3px] border-foreground/15 bg-card/70 px-3 py-2 text-sm shadow-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-seal focus-visible:outline-none focus-visible:ring-0"
+            className="min-h-40 w-full resize-y rounded-[3px] border-foreground/15 bg-card/70 px-3 py-2.5 text-sm leading-relaxed shadow-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-seal focus-visible:outline-none focus-visible:ring-0"
           />
         </div>
 
@@ -977,9 +977,9 @@ function LogRow({
           <textarea
             value={draft.notes}
             onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-            rows={3}
+            rows={5}
             aria-label="Catatan"
-            className="w-full resize-y rounded-[3px] border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none transition-colors focus:border-seal"
+            className="min-h-32 w-full resize-y rounded-[3px] border border-foreground/15 bg-transparent px-3 py-2.5 text-sm leading-relaxed outline-none transition-colors focus:border-seal"
           />
           {editError && (
             <p role="alert" className="text-sm text-destructive">

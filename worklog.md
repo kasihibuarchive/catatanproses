@@ -313,3 +313,19 @@ Stage Summary:
 - Lib baru: buildMonthCsv + csvCell, DRAFT_STORAGE_KEY + FormDraft.
 - Fitur aktif kini: catat hari ini/backdate, pakai-lagi, draf otomatis, feed bulan→pekan re-sort instan, salin (bulan/WhatsApp/gambar PNG/CSV/per entri), ubah inline + re-date (Escape-batal, fokus kembali), hapus dua-langkah, foto ala cetakan album, kanji hari, PWA hanko + OG card, skip link, offline fallback SW + indikator offline, caret vermillion + scrollbar washi.
 - Ronde berikutnya: app dianggap feature-complete; hanya regresi/polish mikro sesuai kebutuhan (jangan tambah fitur besar — user minta simpel & minimalis).
+---
+Task ID: user-fix-1
+Agent: main (Z.ai Code)
+Task: Permintaan langsung user — (1) contoh placeholder divisi "masa akting?" diganti, contoh: "bana - divisi sound"; (2) box catatan (untuk menjelaskan latihan) dibuat lebih besar.
+
+Work Log:
+- Ganti placeholder Nama/Divisi: "cth. Raka — Divisi Akting" → "cth. Bana — divisi sound" (satu-satunya kemunculan "Akting" di src, terverifikasi grep).
+- Perbesar box Catatan di form utama: rows 3→6, min-h-20 (80px)→min-h-40 (160px), py-2→py-2.5, + leading-relaxed agar tulisan multi-baris lebih lega.
+- Samakan form edit inline: textarea catatan rows 3→5, min-h-32, py-2.5, leading-relaxed.
+- E2E agent-browser: placeholder terverifikasi di DOM ("cth. Bana — divisi sound"); textarea utama 160px/rows 6; submit entri uji (nama "Bana — divisi sound", durasi 1,5, catatan 2 baris) → masuk feed + toast; form edit terbuka → textarea 136px/rows 5; batal; hapus dua-langkah ("hapus" → "yakin? klik lagi") → feed kembali "Belum ada catatan."
+- Pembersihan: DB 0 baris, public/uploads kosong, localStorage (panggung.actorName + panggung.draft) dibersihkan; dev.log hanya request 200/201, tanpa error; lint 0 masalah.
+
+Stage Summary:
+- Tidak ada perubahan API/skema/kontrak. Hanya page.tsx (placeholder + 2 textarea).
+- Form kini mengundang catatan panjang — selaras "box answer untuk menjelaskan latihan".
+- Cron webDevReview 15 menit dibuat ulang (job lama hilang dari scheduler).

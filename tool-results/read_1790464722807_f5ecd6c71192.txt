@@ -1,0 +1,1098 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useCallback, useEffect, useRef, useState } from "react";
+     4→     4→import { toast } from "sonner";
+     5→     5→
+     6→     6→import { Button } from "@/components/ui/button";
+     7→     7→import { Input } from "@/components/ui/input";
+     8→     8→import { Label } from "@/components/ui/label";
+     9→     9→import { Textarea } from "@/components/ui/textarea";
+    10→    10→import {
+    11→    11→  ACTOR_NAME_STORAGE_KEY,
+    12→    12→  buildEntrySummary,
+    13→    13→  buildMonthCsv,
+    14→    14→  buildMonthSummary,
+    15→    15→  dateKey,
+    16→    16→  DRAFT_STORAGE_KEY,
+    17→    17→  formatDuration,
+    18→    18→  groupByMonthWeek,
+    19→    19→  hoursToMinutes,
+    20→    20→  minutesToHoursInput,
+    21→    21→  monthActorCount,
+    22→    22→  monthPhotoCount,
+    23→    23→  monthSessionCount,
+    24→    24→  sortFeedLogs,
+    25→    25→  toDateKey,
+    26→    26→  WEEKDAY_KANJI,
+    27→    27→  type FormDraft,
+    28→    28→  type MonthGroup,
+    29→    29→  type PracticeLog,
+    30→    30→} from "@/lib/panggung";
+    31→    31→import { renderMonthSummaryBlob } from "@/lib/summary-image";
+    32→    32→
+    33→    33→/** Quiet lowercase text-link used for all small actions. */
+    34→    34→const textLink =
+    35→    35→  "rounded-sm text-xs underline underline-offset-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+    36→    36→
+    37→    37→/** Ink underline input — quiet, like a brush line. */
+    38→    38→const underlineInput =
+    39→    39→  "h-10 w-full rounded-none border-0 border-b border-foreground/20 bg-transparent px-1 text-sm shadow-none transition-colors placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-0 focus-visible:border-seal";
+    40→    40→
+    41→    41→export default function Page() {
+    42→    42→  const [logs, setLogs] = useState<PracticeLog[]>([]);
+    43→    43→  const [loading, setLoading] = useState(true);
+    44→    44→  const [error, setError] = useState<string | null>(null);
+    45→    45→  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+    46→    46→  const [online, setOnline] = useState(true);
+    47→    47→
+    48→    48→  // Live online/offline state for the quiet banner under the header.
+    49→    49→  useEffect(() => {
+    50→    50→    const update = () => setOnline(navigator.onLine);
+    51→    51→    update();
+    52→    52→    window.addEventListener("online", update);
+    53→    53→    window.addEventListener("offline", update);
+    54→    54→    return () => {
+    55→    55→      window.removeEventListener("online", update);
+    56→    56→      window.removeEventListener("offline", update);
+    57→    57→    };
+    58→    58→  }, []);
+    59→    59→
+    60→    60→  const refresh = useCallback(async () => {
+    61→    61→    setError(null);
+    62→    62→    try {
+    63→    63→      const res = await fetch("/api/logs", { cache: "no-store" });
+    64→    64→      if (!res.ok) throw new Error();
+    65→    65→      const data = (await res.json()) as { logs: PracticeLog[] };
+    66→    66→      setLogs(data.logs);
+    67→    67→    } catch {
+    68→    68→      setError("Tidak bisa memuat log. Coba lagi.");
+    69→    69→    } finally {
+    70→    70→      setLoading(false);
+    71→    71→    }
+    72→    72→  }, []);
+    73→    73→
+    74→    74→  useEffect(() => {
+    75→    75→    void refresh();
+    76→    76→  }, [refresh]);
+    77→    77→
+    78→    78→  const handleCreated = useCallback((log: PracticeLog) => {
+    79→    79→    setLogs((prev) => {
+    80→    80→      // Insert in feed order (date desc, createdAt desc) so backdated
+    81→    81→      // entries land in the right place instead of always on top.
+    82→    82→      return sortFeedLogs([...prev, log]);
+    83→    83→    });
+    84→    84→    setJustAddedId(log.id);
+    85→    85→    window.setTimeout(() => {
+    86→    86→      setJustAddedId((current) => (current === log.id ? null : current));
+    87→    87→      document
+    88→    88→        .getElementById(`log-${log.id}`)
+    89→    89→        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    90→    90→    }, 120);
+    91→    91→  }, []);
+    92→    92→
+    93→    93→  const handleDeleted = useCallback((id: string) => {
+    94→    94→    setLogs((prev) => prev.filter((l) => l.id !== id));
+    95→    95→  }, []);
+    96→    96→
+    97→    97→  const handleUpdated = useCallback((updated: PracticeLog) => {
+    98→    98→    // Re-sort so a re-dated entry moves to its right place in the feed,
+    99→    99→    // then flash + scroll to it so the move is noticeable.
+   100→   100→    setLogs((prev) => sortFeedLogs(prev.map((l) => (l.id === updated.id ? updated : l))));
+   101→   101→    setJustAddedId(updated.id);
+   102→   102→    window.setTimeout(() => {
+   103→   103→      setJustAddedId((current) => (current === updated.id ? null : current));
+   104→   104→      document
+   105→   105→        .getElementById(`log-${updated.id}`)
+   106→   106→        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+   107→   107→    }, 120);
+   108→   108→  }, []);
+   109→   109→
+   110→   110→  const totalMin = logs.reduce((sum, l) => sum + l.durationMin, 0);
+   111→   111→  const groups = groupByMonthWeek(logs);
+   112→   112→
+   113→   113→  return (
+   114→   114→    <div className="relative flex min-h-screen flex-col">
+   115→   115→      {/* skip link for keyboard users */}
+   116→   116→      <a
+   117→   117→        href="#konten-utama"
+   118→   118→        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-[3px] focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-sm focus:outline-2 focus:outline-offset-2 focus:outline-seal"
+   119→   119→      >
+   120→   120→        Langsung ke isi
+   121→   121→      </a>
+   122→   122→      {/* washi paper grain */}
+   123→   123→      <div aria-hidden className="washi-grain pointer-events-none fixed inset-0 -z-10" />
+   124→   124→      {/* vertical tategaki accent, wide screens only */}
+   125→   125→      <p
+   126→   126→        aria-hidden
+   127→   127→        className="font-kanji fixed right-6 top-1/2 hidden -translate-y-1/2 select-none text-sm tracking-[0.6em] text-foreground/15 lg:block [writing-mode:vertical-rl]"
+   128→   128→      >
+   129→   129→        稽古日誌
+   130→   130→      </p>
+   131→   131→
+   132→   132→      {/* Header */}
+   133→   133→      <header className="border-b border-foreground/10">
+   134→   134→        <div className="mx-auto flex h-16 w-full max-w-2xl items-center justify-between px-5">
+   135→   135→          <div className="flex items-center gap-3">
+   136→   136→            <span
+   137→   137→              aria-hidden
+   138→   138→              className="font-kanji flex size-9 flex-col items-center justify-center rounded-[3px] bg-seal text-[11px] leading-[1.2] text-[#f7f2e6] ring-1 ring-inset ring-white/25"
+   139→   139→            >
+   140→   140→              <span>稽</span>
+   141→   141→              <span>古</span>
+   142→   142→            </span>
+   143→   143→            <div>
+   144→   144→              <p className="font-serif text-sm leading-tight tracking-wide">稽古日誌</p>
+   145→   145→              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+   146→   146→                Log Latihan Teater
+   147→   147→              </p>
+   148→   148→            </div>
+   149→   149→          </div>
+   150→   150→          <p className="text-xs tabular-nums text-muted-foreground">
+   151→   151→            {new Date().toLocaleDateString("id-ID", {
+   152→   152→              weekday: "long",
+   153→   153→              day: "numeric",
+   154→   154→              month: "long",
+   155→   155→            })}
+   156→   156→          </p>
+   157→   157→        </div>
+   158→   158→      </header>
+   159→   159→
+   160→   160→      {!online && (
+   161→   161→        <div className="mx-auto w-full max-w-2xl px-5" role="status">
+   162→   162→          <p className="flex flex-wrap items-baseline gap-2 pt-3 text-xs text-muted-foreground">
+   163→   163→            <span aria-hidden className="font-kanji text-[11px] tracking-[0.25em] text-seal">
+   164→   164→              オフライン
+   165→   165→            </span>
+   166→   166→            kamu sedang offline — catatan baru belum bisa terkirim
+   167→   167→          </p>
+   168→   168→        </div>
+   169→   169→      )}
+   170→   170→
+   171→   171→      <main id="konten-utama" tabIndex={-1} className="mx-auto w-full max-w-2xl flex-1 px-5 focus:outline-none">
+   172→   172→        {/* Form */}
+   173→   173→        <LogForm onCreated={handleCreated} lastLog={logs[0] ?? null} />
+   174→   174→
+   175→   175→        {/* Summary */}
+   176→   176→        {!loading && !error && logs.length > 0 && (
+   177→   177→          <p aria-live="polite" className="mb-6 text-sm tabular-nums text-muted-foreground">
+   178→   178→            {logs.length} sesi · {formatDuration(totalMin)} total
+   179→   179→          </p>
+   180→   180→        )}
+   181→   181→
+   182→   182→        {/* Feed */}
+   183→   183→        {loading ? (
+   184→   184→          <div className="space-y-3 pb-16">
+   185→   185→            <div className="h-5 w-40 rounded bg-foreground/5" />
+   186→   186→            <div className="h-24 rounded-[3px] border border-foreground/10" />
+   187→   187→            <div className="h-24 rounded-[3px] border border-foreground/10" />
+   188→   188→          </div>
+   189→   189→        ) : error ? (
+   190→   190→          <div className="pb-16 text-sm text-muted-foreground">
+   191→   191→            <p>{error}</p>
+   192→   192→            <Button variant="outline" size="sm" className="mt-3" onClick={() => void refresh()}>
+   193→   193→              Coba lagi
+   194→   194→            </Button>
+   195→   195→          </div>
+   196→   196→        ) : logs.length === 0 ? (
+   197→   197→          <div className="border-t border-foreground/10 pb-20 pt-12 text-center">
+   198→   198→            <p aria-hidden className="font-kanji text-4xl text-foreground/15">
+   199→   199→              空
+   200→   200→            </p>
+   201→   201→            <p className="mt-4 text-sm font-medium">Belum ada catatan.</p>
+   202→   202→            <p className="mt-1 text-sm text-muted-foreground">
+   203→   203→              Isi form di atas untuk mencatat latihan pertamamu.
+   204→   204→            </p>
+   205→   205→          </div>
+   206→   206→        ) : (
+   207→   207→          <div className="space-y-10 pb-16">
+   208→   208→            {groups.map((month) => {
+   209→   209→              const sessions = monthSessionCount(month);
+   210→   210→              const people = monthActorCount(month);
+   211→   211→              const photos = monthPhotoCount(month);
+   212→   212→              return (
+   213→   213→                <section key={month.key}>
+   214→   214→                  {/* thick-thin double rule, Showa print style */}
+   215→   215→                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b-[3px] border-double border-foreground/25 pb-2">
+   216→   216→                    <h2 className="font-serif text-base tracking-wide">
+   217→   217→                      {month.label}
+   218→   218→                      <span aria-hidden className="font-kanji ml-2 text-xs text-seal">
+   219→   219→                        {Number(month.key.split("-")[1])}月
+   220→   220→                      </span>
+   221→   221→                      <span className="ml-2 text-xs font-sans font-normal tabular-nums text-muted-foreground">
+   222→   222→                        {sessions} sesi
+   223→   223→                        {people > 1 ? ` · ${people} orang` : ""}
+   224→   224→                        {photos > 0 ? ` · ${photos} foto` : ""}
+   225→   225→                      </span>
+   226→   226→                    </h2>
+   227→   227→                    <div className="flex shrink-0 items-baseline gap-3">
+   228→   228→                      <p className="text-xs tabular-nums text-muted-foreground">
+   229→   229→                        {formatDuration(month.totalMin)}
+   230→   230→                      </p>
+   231→   231→                      <ShareMonthLink month={month} />
+   232→   232→                      <span aria-hidden className="text-foreground/20">·</span>
+   233→   233→                      <CopyMonthButton month={month} />
+   234→   234→                      <span aria-hidden className="text-foreground/20">·</span>
+   235→   235→                      <DownloadMonthImage month={month} />
+   236→   236→                      <span aria-hidden className="text-foreground/20">·</span>
+   237→   237→                      <DownloadMonthCsv month={month} />
+   238→   238→                    </div>
+   239→   239→                  </div>
+   240→   240→                  {month.weeks.map((week) => (
+   241→   241→                    <div key={week.key} className="mt-5">
+   242→   242→                      <p className="text-xs tracking-wide text-muted-foreground">
+   243→   243→                        {week.range} · {formatDuration(week.totalMin)}
+   244→   244→                      </p>
+   245→   245→                      <ul className="mt-2 space-y-2">
+   246→   246→                        {week.logs.map((log) => (
+   247→   247→                          <LogRow
+   248→   248→                            key={log.id}
+   249→   249→                            log={log}
+   250→   250→                            justAdded={log.id === justAddedId}
+   251→   251→                            onDeleted={handleDeleted}
+   252→   252→                            onUpdated={handleUpdated}
+   253→   253→                          />
+   254→   254→                        ))}
+   255→   255→                      </ul>
+   256→   256→                    </div>
+   257→   257→                  ))}
+   258→   258→                </section>
+   259→   259→              );
+   260→   260→            })}
+   261→   261→          </div>
+   262→   262→        )}
+   263→   263→      </main>
+   264→   264→
+   265→   265→      {/* Footer */}
+   266→   266→      <footer className="mt-auto border-t border-foreground/10">
+   267→   267→        <div className="mx-auto flex w-full max-w-2xl items-start justify-between gap-4 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
+   268→   268→          <div>
+   269→   269→            <p className="font-kanji text-sm tracking-[0.3em] text-foreground/70">継続は力なり</p>
+   270→   270→            <p className="mt-1.5 text-xs text-muted-foreground">
+   271→   271→              Keizoku wa chikara nari — konsistensi adalah kekuatan.
+   272→   272→            </p>
+   273→   273→          </div>
+   274→   274→          <button
+   275→   275→            type="button"
+   276→   276→            onClick={() =>
+   277→   277→              window.scrollTo({
+   278→   278→                top: 0,
+   279→   279→                behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+   280→   280→                  ? "auto"
+   281→   281→                  : "smooth",
+   282→   282→              })
+   283→   283→            }
+   284→   284→            className={`${textLink} shrink-0 pt-0.5`}
+   285→   285→          >
+   286→   286→            ↑ atas
+   287→   287→          </button>
+   288→   288→        </div>
+   289→   289→      </footer>
+   290→   290→    </div>
+   291→   291→  );
+   292→   292→}
+   293→   293→
+   294→   294→/* ---------- Copy month summary ---------- */
+   295→   295→
+   296→   296→/** Quiet link that opens WhatsApp with the month recap pre-filled. */
+   297→   297→function ShareMonthLink({ month }: { month: MonthGroup }) {
+   298→   298→  const href = `https://wa.me/?text=${encodeURIComponent(buildMonthSummary(month))}`;
+   299→   299→  return (
+   300→   300→    <a
+   301→   301→      href={href}
+   302→   302→      target="_blank"
+   303→   303→      rel="noreferrer"
+   304→   304→      title="Bagikan ringkasan bulan ini via WhatsApp"
+   305→   305→      className={textLink}
+   306→   306→    >
+   307→   307→      whatsapp
+   308→   308→    </a>
+   309→   309→  );
+   310→   310→}
+   311→   311→
+   312→   312→/** Quiet link that renders the month recap as a washi PNG poster and downloads it. */
+   313→   313→function DownloadMonthImage({ month }: { month: MonthGroup }) {
+   314→   314→  const [busy, setBusy] = useState(false);
+   315→   315→
+   316→   316→  const download = async () => {
+   317→   317→    setBusy(true);
+   318→   318→    try {
+   319→   319→      const blob = await renderMonthSummaryBlob(month);
+   320→   320→      const url = URL.createObjectURL(blob);
+   321→   321→      const a = document.createElement("a");
+   322→   322→      a.href = url;
+   323→   323→      a.download = `kekiro-${month.key}.png`;
+   324→   324→      document.body.appendChild(a);
+   325→   325→      a.click();
+   326→   326→      a.remove();
+   327→   327→      window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+   328→   328→      toast.success("Gambar ringkasan diunduh.");
+   329→   329→    } catch {
+   330→   330→      toast.error("Gagal membuat gambar.");
+   331→   331→    } finally {
+   332→   332→      setBusy(false);
+   333→   333→    }
+   334→   334→  };
+   335→   335→
+   336→   336→  return (
+   337→   337→    <button type="button" onClick={download} disabled={busy} className={textLink}>
+   338→   338→      {busy ? "menyiapkan…" : "gambar"}
+   339→   339→    </button>
+   340→   340→  );
+   341→   341→}
+   342→   342→
+   343→   343→/** Quiet link that downloads the month ledger as a plain CSV file. */
+   344→   344→function DownloadMonthCsv({ month }: { month: MonthGroup }) {
+   345→   345→  const download = () => {
+   346→   346→    const csv = `\uFEFF${buildMonthCsv(month)}`;
+   347→   347→    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+   348→   348→    const url = URL.createObjectURL(blob);
+   349→   349→    const a = document.createElement("a");
+   350→   350→    a.href = url;
+   351→   351→    a.download = `kekiro-${month.key}.csv`;
+   352→   352→    document.body.appendChild(a);
+   353→   353→    a.click();
+   354→   354→    a.remove();
+   355→   355→    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+   356→   356→    toast.success("CSV diunduh.");
+   357→   357→  };
+   358→   358→
+   359→   359→  return (
+   360→   360→    <button type="button" onClick={download} className={textLink}>
+   361→   361→      csv
+   362→   362→    </button>
+   363→   363→  );
+   364→   364→}
+   365→   365→
+   366→   366→function CopyMonthButton({ month }: { month: MonthGroup }) {
+   367→   367→  const [copied, setCopied] = useState(false);
+   368→   368→
+   369→   369→  const copy = async () => {
+   370→   370→    try {
+   371→   371→      await navigator.clipboard.writeText(buildMonthSummary(month));
+   372→   372→      toast.success("Ringkasan disalin.");
+   373→   373→      setCopied(true);
+   374→   374→      window.setTimeout(() => setCopied(false), 1600);
+   375→   375→    } catch {
+   376→   376→      toast.error("Gagal menyalin.");
+   377→   377→    }
+   378→   378→  };
+   379→   379→
+   380→   380→  return (
+   381→   381→    <button type="button" onClick={copy} className={textLink}>
+   382→   382→      {copied ? "tersalin" : "salin"}
+   383→   383→    </button>
+   384→   384→  );
+   385→   385→}
+   386→   386→
+   387→   387→/* ---------- Form ---------- */
+   388→   388→
+   389→   389→const DURATION_CHIPS: { label: string; hours: number }[] = [
+   390→   390→  { label: "0,5", hours: 0.5 },
+   391→   391→  { label: "1", hours: 1 },
+   392→   392→  { label: "1,5", hours: 1.5 },
+   393→   393→  { label: "2", hours: 2 },
+   394→   394→  { label: "3", hours: 3 },
+   395→   395→];
+   396→   396→
+   397→   397→function LogForm({
+   398→   398→  onCreated,
+   399→   399→  lastLog,
+   400→   400→}: {
+   401→   401→  onCreated: (log: PracticeLog) => void;
+   402→   402→  lastLog: PracticeLog | null;
+   403→   403→}) {
+   404→   404→  const [actorName, setActorName] = useState("");
+   405→   405→  const [title, setTitle] = useState("");
+   406→   406→  const [durationHours, setDurationHours] = useState("");
+   407→   407→  const [notes, setNotes] = useState("");
+   408→   408→  const [dateValue, setDateValue] = useState(""); // "" = today
+   409→   409→  const [showDatePicker, setShowDatePicker] = useState(false);
+   410→   410→  const [todayKey, setTodayKey] = useState("");
+   411→   411→  const [photo, setPhoto] = useState<File | null>(null);
+   412→   412→  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+   413→   413→  const [submitting, setSubmitting] = useState(false);
+   414→   414→  const [fieldError, setFieldError] = useState<string | null>(null);
+   415→   415→  const [draftRestored, setDraftRestored] = useState(false);
+   416→   416→  const fileRef = useRef<HTMLInputElement>(null);
+   417→   417→
+   418→   418→  // Prefill name from localStorage (client only), then restore any unsent
+   419→   419→  // draft so a reload never loses what was being typed.
+   420→   420→  useEffect(() => {
+   421→   421→    const saved = window.localStorage.getItem(ACTOR_NAME_STORAGE_KEY);
+   422→   422→    if (saved) setActorName(saved);
+   423→   423→    setTodayKey(toDateKey(new Date()));
+   424→   424→
+   425→   425→    try {
+   426→   426→      const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+   427→   427→      if (!raw) return;
+   428→   428→      const d = JSON.parse(raw) as Partial<FormDraft>;
+   429→   429→      if (!d.title && !d.durationHours && !d.notes) return;
+   430→   430→      if (d.actorName) setActorName(d.actorName);
+   431→   431→      if (d.title) setTitle(d.title);
+   432→   432→      if (d.durationHours) setDurationHours(d.durationHours);
+   433→   433→      if (d.notes) setNotes(d.notes);
+   434→   434→      setDraftRestored(true);
+   435→   435→    } catch {
+   436→   436→      // Corrupt draft — ignore, start fresh.
+   437→   437→    }
+   438→   438→  }, []);
+   439→   439→
+   440→   440→  // Persist the draft on every keystroke; cleared once the form is empty.
+   441→   441→  // Only content fields count — the name alone lives in its own key.
+   442→   442→  useEffect(() => {
+   443→   443→    const draft: FormDraft = { actorName, title, durationHours, notes };
+   444→   444→    const hasContent = Boolean(
+   445→   445→      title.trim() || durationHours.trim() || notes.trim()
+   446→   446→    );
+   447→   447→    if (hasContent) {
+   448→   448→      window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+   449→   449→    } else {
+   450→   450→      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+   451→   451→    }
+   452→   452→  }, [actorName, title, durationHours, notes]);
+   453→   453→
+   454→   454→  const isToday = !dateValue || (todayKey !== "" && dateValue === todayKey);
+   455→   455→  const isYesterday =
+   456→   456→    !isToday &&
+   457→   457→    todayKey !== "" &&
+   458→   458→    dateValue === toDateKey(new Date(Date.now() - 86400000));
+   459→   459→
+   460→   460→  // "Use last practice" is only useful while the form is still blank.
+   461→   461→  const canReuse = Boolean(lastLog) && !title && !durationHours && !notes;
+   462→   462→  const reuseLast = () => {
+   463→   463→    if (!lastLog) return;
+   464→   464→    setTitle(lastLog.title);
+   465→   465→    setDurationHours(minutesToHoursInput(lastLog.durationMin));
+   466→   466→    setNotes(lastLog.notes);
+   467→   467→  };
+   468→   468→
+   469→   469→  const pickedDateLabel =
+   470→   470→    dateValue && !isToday
+   471→   471→      ? new Date(`${dateValue}T00:00:00`).toLocaleDateString("id-ID", {
+   472→   472→          day: "numeric",
+   473→   473→          month: "long",
+   474→   474→        })
+   475→   475→      : "hari ini";
+   476→   476→
+   477→   477→  const pickPhoto = (file: File | null) => {
+   478→   478→    if (photoPreview) URL.revokeObjectURL(photoPreview);
+   479→   479→    setPhoto(file);
+   480→   480→    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+   481→   481→  };
+   482→   482→
+   483→   483→  const reset = (keepName: boolean) => {
+   484→   484→    if (!keepName) setActorName("");
+   485→   485→    setTitle("");
+   486→   486→    setDurationHours("");
+   487→   487→    setNotes("");
+   488→   488→    setDateValue("");
+   489→   489→    setShowDatePicker(false);
+   490→   490→    setDraftRestored(false);
+   491→   491→    pickPhoto(null);
+   492→   492→    if (fileRef.current) fileRef.current.value = "";
+   493→   493→  };
+   494→   494→
+   495→   495→  const submit = async (e?: React.FormEvent) => {
+   496→   496→    e?.preventDefault();
+   497→   497→    setFieldError(null);
+   498→   498→
+   499→   499→    if (!actorName.trim()) return setFieldError("Isi nama/divisi dulu ya.");
+   500→   500→    if (!title.trim()) return setFieldError("Tulis apa yang dilatih hari ini.");
+   501→   501→    const minutes = hoursToMinutes(durationHours);
+   502→   502→    if (minutes === null || minutes < 1) {
+   503→   503→      return setFieldError("Isi durasi latihan (jam).");
+   504→   504→    }
+   505→   505→    if (minutes > 1440) {
+   506→   506→      return setFieldError("Durasi maksimal 24 jam.");
+   507→   507→    }
+   508→   508→
+   509→   509→    setSubmitting(true);
+   510→   510→    try {
+   511→   511→      const fd = new FormData();
+   512→   512→      fd.set("actorName", actorName.trim());
+   513→   513→      fd.set("title", title.trim());
+   514→   514→      fd.set("durationMin", String(minutes));
+   515→   515→      fd.set("notes", notes.trim());
+   516→   516→      if (!isToday && dateValue) fd.set("date", dateValue);
+   517→   517→
+   518→   518→      let file: File | null = photo;
+   519→   519→      if (file) {
+   520→   520→        // Downscale in the browser so uploads stay small.
+   521→   521→        file = await downscaleImage(file);
+   522→   522→        if (file) fd.set("image", file);
+   523→   523→      }
+   524→   524→
+   525→   525→      const res = await fetch("/api/logs", { method: "POST", body: fd });
+   526→   526→      const data = (await res.json().catch(() => null)) as
+   527→   527→        | { log?: PracticeLog; error?: string }
+   528→   528→        | null;
+   529→   529→
+   530→   530→      if (!res.ok || !data?.log) {
+   531→   531→        throw new Error(data?.error ?? "Gagal menyimpan. Coba lagi.");
+   532→   532→      }
+   533→   533→
+   534→   534→      window.localStorage.setItem(ACTOR_NAME_STORAGE_KEY, actorName.trim());
+   535→   535→      onCreated(data.log);
+   536→   536→      reset(true);
+   537→   537→      toast.success("Latihan tercatat.");
+   538→   538→    } catch (err) {
+   539→   539→      setFieldError(
+   540→   540→        !navigator.onLine
+   541→   541→          ? "Kamu sedang offline. Sambungkan internet, lalu coba lagi."
+   542→   542→          : err instanceof Error
+   543→   543→            ? err.message
+   544→   544→            : "Gagal menyimpan. Coba lagi."
+   545→   545→      );
+   546→   546→    } finally {
+   547→   547→      setSubmitting(false);
+   548→   548→    }
+   549→   549→  };
+   550→   550→
+   551→   551→  return (
+   552→   552→    <form
+   553→   553→      onSubmit={submit}
+   554→   554→      onKeyDown={(e) => {
+   555→   555→        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+   556→   556→          e.preventDefault();
+   557→   557→          void submit();
+   558→   558→        }
+   559→   559→      }}
+   560→   560→      className="pb-8 pt-10"
+   561→   561→      noValidate
+   562→   562→    >
+   563→   563→      <p
+   564→   564→        aria-hidden
+   565→   565→        className="font-kanji text-xs tracking-[0.35em] text-seal"
+   566→   566→      >
+   567→   567→        {isToday ? "今日の稽古" : isYesterday ? "昨日の稽古" : "過去の稽古"}
+   568→   568→      </p>
+   569→   569→      <h1 className="mt-2 font-serif text-2xl tracking-tight">
+   570→   570→        {isToday ? "Catat latihan hari ini" : `Catat latihan ${pickedDateLabel}`}
+   571→   571→      </h1>
+   572→   572→      <p className="mt-2 text-sm text-muted-foreground">
+   573→   573→        Isi detilnya, tambahkan foto kalau ada, lalu kirim.
+   574→   574→      </p>
+   575→   575→      {canReuse && (
+   576→   576→        <p className="mt-2 text-xs text-muted-foreground">
+   577→   577→          Latihan terakhir: “{lastLog?.title}” ·{" "}
+   578→   578→          <button type="button" onClick={reuseLast} className={textLink}>
+   579→   579→            pakai lagi
+   580→   580→          </button>
+   581→   581→        </p>
+   582→   582→      )}
+   583→   583→      {draftRestored && (
+   584→   584→        <p className="mt-2 text-xs text-muted-foreground">
+   585→   585→          <span aria-hidden className="font-kanji mr-1.5 text-[11px] text-seal/75">
+   586→   586→            下書き
+   587→   587→          </span>
+   588→   588→          draf yang belum terkirim dipulihkan ·{" "}
+   589→   589→          <button
+   590→   590→            type="button"
+   591→   591→            onClick={() => {
+   592→   592→              setActorName("");
+   593→   593→              setTitle("");
+   594→   594→              setDurationHours("");
+   595→   595→              setNotes("");
+   596→   596→              setDraftRestored(false);
+   597→   597→            }}
+   598→   598→            className={textLink}
+   599→   599→          >
+   600→   600→            kosongkan
+   601→   601→          </button>
+   602→   602→        </p>
+   603→   603→      )}
+   604→   604→
+   605→   605→      {/* Date row — quiet by default, backdate on demand */}
+   606→   606→      <div className="mt-4 min-h-9">
+   607→   607→        {showDatePicker ? (
+   608→   608→          <div className="flex flex-wrap items-center gap-3">
+   609→   609→            <input
+   610→   610→              type="date"
+   611→   611→              value={dateValue}
+   612→   612→              max={todayKey || undefined}
+   613→   613→              onChange={(e) => setDateValue(e.target.value)}
+   614→   614→              aria-label="Tanggal latihan"
+   615→   615→              className="h-9 rounded-[3px] border border-foreground/15 bg-card/70 px-2 text-sm tabular-nums shadow-none outline-none transition-colors focus:border-seal"
+   616→   616→            />
+   617→   617→            <button
+   618→   618→              type="button"
+   619→   619→              onClick={() => setShowDatePicker(false)}
+   620→   620→              className={textLink}
+   621→   621→            >
+   622→   622→              selesai
+   623→   623→            </button>
+   624→   624→          </div>
+   625→   625→        ) : (
+   626→   626→          <p className="text-xs text-muted-foreground">
+   627→   627→            Tanggal: {pickedDateLabel} ·{" "}
+   628→   628→            <button
+   629→   629→              type="button"
+   630→   630→              onClick={() => setShowDatePicker(true)}
+   631→   631→              className={textLink}
+   632→   632→            >
+   633→   633→              ubah
+   634→   634→            </button>
+   635→   635→          </p>
+   636→   636→        )}
+   637→   637→      </div>
+   638→   638→
+   639→   639→      <div className="mt-6 space-y-5">
+   640→   640→        <div className="grid gap-5 sm:grid-cols-2">
+   641→   641→          <div className="space-y-1.5">
+   642→   642→            <Label htmlFor="actorName">Nama/Divisi</Label>
+   643→   643→            <Input
+   644→   644→              id="actorName"
+   645→   645→              value={actorName}
+   646→   646→              onChange={(e) => setActorName(e.target.value)}
+   647→   647→              placeholder="cth. Raka — Divisi Akting"
+   648→   648→              autoComplete="name"
+   649→   649→              className={underlineInput}
+   650→   650→            />
+   651→   651→          </div>
+   652→   652→          <div className="space-y-1.5">
+   653→   653→            <Label htmlFor="durationHours">Durasi (jam)</Label>
+   654→   654→            <Input
+   655→   655→              id="durationHours"
+   656→   656→              type="text"
+   657→   657→              inputMode="decimal"
+   658→   658→              autoComplete="off"
+   659→   659→              value={durationHours}
+   660→   660→              onChange={(e) => setDurationHours(e.target.value)}
+   661→   661→              placeholder="1,5"
+   662→   662→              className={`${underlineInput} tabular-nums`}
+   663→   663→            />
+   664→   664→            <div className="flex items-center gap-1">
+   665→   665→              {DURATION_CHIPS.map((chip) => (
+   666→   666→                <button
+   667→   667→                  key={chip.label}
+   668→   668→                  type="button"
+   669→   669→                  onClick={() => setDurationHours(chip.label)}
+   670→   670→                  aria-label={`Set durasi ${chip.label} jam`}
+   671→   671→                  aria-pressed={durationHours === chip.label}
+   672→   672→                  className={`rounded px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
+   673→   673→                    durationHours === chip.label ? "bg-foreground/5 text-foreground" : ""
+   674→   674→                  }`}
+   675→   675→                >
+   676→   676→                  {chip.label}
+   677→   677→                </button>
+   678→   678→              ))}
+   679→   679→            </div>
+   680→   680→          </div>
+   681→   681→        </div>
+   682→   682→
+   683→   683→        <div className="space-y-1.5">
+   684→   684→          <Label htmlFor="title">Apa yang dilatih?</Label>
+   685→   685→          <Input
+   686→   686→            id="title"
+   687→   687→            value={title}
+   688→   688→            onChange={(e) => setTitle(e.target.value)}
+   689→   689→            placeholder="cth. Latihan bloking adegan 3"
+   690→   690→            className={underlineInput}
+   691→   691→          />
+   692→   692→        </div>
+   693→   693→
+   694→   694→        <div className="space-y-1.5">
+   695→   695→          <Label htmlFor="notes">Catatan (opsional)</Label>
+   696→   696→          <Textarea
+   697→   697→            id="notes"
+   698→   698→            rows={3}
+   699→   699→            value={notes}
+   700→   700→            onChange={(e) => setNotes(e.target.value)}
+   701→   701→            placeholder="Yang sulit, yang menemukan, catatan sutradara…"
+   702→   702→            className="min-h-20 w-full resize-y rounded-[3px] border-foreground/15 bg-card/70 px-3 py-2 text-sm shadow-none transition-colors placeholder:text-muted-foreground/60 focus-visible:border-seal focus-visible:outline-none focus-visible:ring-0"
+   703→   703→          />
+   704→   704→        </div>
+   705→   705→
+   706→   706→        <div className="flex flex-wrap items-center gap-3">
+   707→   707→          <input
+   708→   708→            ref={fileRef}
+   709→   709→            type="file"
+   710→   710→            accept="image/*"
+   711→   711→            className="hidden"
+   712→   712→            aria-label="Pilih foto latihan"
+   713→   713→            onChange={(e) => pickPhoto(e.target.files?.[0] ?? null)}
+   714→   714→          />
+   715→   715→          <Button
+   716→   716→            type="button"
+   717→   717→            variant="outline"
+   718→   718→            size="sm"
+   719→   719→            onClick={() => fileRef.current?.click()}
+   720→   720→          >
+   721→   721→            {photo ? "Ganti foto" : "Tambah foto"}
+   722→   722→          </Button>
+   723→   723→          {photoPreview && (
+   724→   724→            <div className="flex items-center gap-2">
+   725→   725→              <img
+   726→   726→                src={photoPreview}
+   727→   727→                alt="Pratinjau foto latihan"
+   728→   728→                className="size-12 -rotate-[0.6deg] rounded-[2px] border border-foreground/15 bg-white object-cover p-0.5 shadow-[0_1px_4px_rgba(60,50,30,0.10)] motion-reduce:rotate-0"
+   729→   729→              />
+   730→   730→              <button
+   731→   731→                type="button"
+   732→   732→                onClick={() => {
+   733→   733→                  pickPhoto(null);
+   734→   734→                  if (fileRef.current) fileRef.current.value = "";
+   735→   735→                }}
+   736→   736→                className={textLink}
+   737→   737→              >
+   738→   738→                buang
+   739→   739→              </button>
+   740→   740→            </div>
+   741→   741→          )}
+   742→   742→        </div>
+   743→   743→
+   744→   744→        {fieldError && (
+   745→   745→          <p role="alert" className="text-sm text-destructive">
+   746→   746→            {fieldError}
+   747→   747→          </p>
+   748→   748→        )}
+   749→   749→
+   750→   750→        <Button
+   751→   751→          type="submit"
+   752→   752→          disabled={submitting}
+   753→   753→          aria-keyshortcuts="Meta+Enter Control+Enter"
+   754→   754→          title="Pintasan: Ctrl/⌘ + Enter"
+   755→   755→          className="w-full tracking-wide active:translate-y-px sm:w-auto sm:min-w-36"
+   756→   756→        >
+   757→   757→          {submitting ? "Mengirim…" : "Kirim"}
+   758→   758→        </Button>
+   759→   759→      </div>
+   760→   760→    </form>
+   761→   761→  );
+   762→   762→}
+   763→   763→
+   764→   764→/* ---------- Log row ---------- */
+   765→   765→
+   766→   766→/** Quiet link that copies one entry's recap into the clipboard. */
+   767→   767→function CopyEntryButton({ log }: { log: PracticeLog }) {
+   768→   768→  const [copied, setCopied] = useState(false);
+   769→   769→
+   770→   770→  const copy = async () => {
+   771→   771→    try {
+   772→   772→      await navigator.clipboard.writeText(buildEntrySummary(log));
+   773→   773→      toast.success("Catatan disalin.");
+   774→   774→      setCopied(true);
+   775→   775→      window.setTimeout(() => setCopied(false), 1600);
+   776→   776→    } catch {
+   777→   777→      toast.error("Gagal menyalin.");
+   778→   778→    }
+   779→   779→  };
+   780→   780→
+   781→   781→  return (
+   782→   782→    <button type="button" onClick={copy} className={textLink}>
+   783→   783→      {copied ? "tersalin" : "salin"}
+   784→   784→    </button>
+   785→   785→  );
+   786→   786→}
+   787→   787→
+   788→   788→function relativeDayLabel(day: string): string | null {
+   789→   789→  const today = toDateKey(new Date());
+   790→   790→  if (day === today) return "Hari ini";
+   791→   791→  const target = new Date(`${day}T00:00:00`).getTime();
+   792→   792→  const now = new Date(`${today}T00:00:00`).getTime();
+   793→   793→  const diffDays = Math.round((now - target) / 86400000);
+   794→   794→  if (diffDays === 1) return "Kemarin";
+   795→   795→  if (diffDays >= 2 && diffDays <= 6) return `${diffDays} hari lalu`;
+   796→   796→  return null;
+   797→   797→}
+   798→   798→
+   799→   799→function LogRow({
+   800→   800→  log,
+   801→   801→  justAdded,
+   802→   802→  onDeleted,
+   803→   803→  onUpdated,
+   804→   804→}: {
+   805→   805→  log: PracticeLog;
+   806→   806→  justAdded: boolean;
+   807→   807→  onDeleted: (id: string) => void;
+   808→   808→  onUpdated: (log: PracticeLog) => void;
+   809→   809→}) {
+   810→   810→  const [confirming, setConfirming] = useState(false);
+   811→   811→  const [editing, setEditing] = useState(false);
+   812→   812→  const [saving, setSaving] = useState(false);
+   813→   813→  const [editError, setEditError] = useState<string | null>(null);
+   814→   814→  const [focusAfterEdit, setFocusAfterEdit] = useState(false);
+   815→   815→  const editButtonRef = useRef<HTMLButtonElement>(null);
+   816→   816→  const [draft, setDraft] = useState({
+   817→   817→    actorName: log.actorName,
+   818→   818→    title: log.title,
+   819→   819→    durationHours: minutesToHoursInput(log.durationMin),
+   820→   820→    notes: log.notes,
+   821→   821→    date: dateKey(log.date),
+   822→   822→  });
+   823→   823→
+   824→   824→  const startEdit = () => {
+   825→   825→    setDraft({
+   826→   826→      actorName: log.actorName,
+   827→   827→      title: log.title,
+   828→   828→      durationHours: minutesToHoursInput(log.durationMin),
+   829→   829→      notes: log.notes,
+   830→   830→      date: dateKey(log.date),
+   831→   831→    });
+   832→   832→    setEditError(null);
+   833→   833→    setConfirming(false);
+   834→   834→    setEditing(true);
+   835→   835→  };
+   836→   836→
+   837→   837→  /** Leave edit mode and hand focus back to the "ubah" link once it re-mounts. */
+   838→   838→  const cancelEdit = () => {
+   839→   839→    setEditing(false);
+   840→   840→    setFocusAfterEdit(true);
+   841→   841→  };
+   842→   842→
+   843→   843→  // Focus is restored in a post-commit effect so the ref'd "ubah" button
+   844→   844→  // is guaranteed to exist (works for both cancel and save paths).
+   845→   845→  useEffect(() => {
+   846→   846→    if (!editing && focusAfterEdit) {
+   847→   847→      setFocusAfterEdit(false);
+   848→   848→      editButtonRef.current?.focus();
+   849→   849→    }
+   850→   850→  }, [editing, focusAfterEdit]);
+   851→   851→
+   852→   852→  const saveEdit = async () => {
+   853→   853→    const name = draft.actorName.trim();
+   854→   854→    const title = draft.title.trim();
+   855→   855→    const minutes = hoursToMinutes(draft.durationHours);
+   856→   856→    if (!name) return setEditError("Nama tidak boleh kosong.");
+   857→   857→    if (!title) return setEditError("Judul tidak boleh kosong.");
+   858→   858→    if (!draft.date) return setEditError("Tanggal wajib ada.");
+   859→   859→    if (minutes === null || minutes < 1) {
+   860→   860→      return setEditError("Isi durasi (jam).");
+   861→   861→    }
+   862→   862→    if (minutes > 1440) {
+   863→   863→      return setEditError("Durasi maksimal 24 jam.");
+   864→   864→    }
+   865→   865→
+   866→   866→    setSaving(true);
+   867→   867→    setEditError(null);
+   868→   868→    try {
+   869→   869→      const dateChanged = draft.date !== dateKey(log.date);
+   870→   870→      const res = await fetch(`/api/logs/${log.id}`, {
+   871→   871→        method: "PATCH",
+   872→   872→        headers: { "Content-Type": "application/json" },
+   873→   873→        body: JSON.stringify({
+   874→   874→          actorName: name,
+   875→   875→          title,
+   876→   876→          durationMin: minutes,
+   877→   877→          notes: draft.notes.trim(),
+   878→   878→          ...(dateChanged ? { date: draft.date } : {}),
+   879→   879→        }),
+   880→   880→      });
+   881→   881→      const data = (await res.json().catch(() => null)) as
+   882→   882→        | { log?: PracticeLog; error?: string }
+   883→   883→        | null;
+   884→   884→      if (!res.ok || !data?.log) {
+   885→   885→        throw new Error(data?.error ?? "Gagal menyimpan perubahan.");
+   886→   886→      }
+   887→   887→      onUpdated(data.log);
+   888→   888→      setEditing(false);
+   889→   889→      setFocusAfterEdit(true);
+   890→   890→      toast.success("Perubahan tersimpan.");
+   891→   891→    } catch (err) {
+   892→   892→      setEditError(err instanceof Error ? err.message : "Gagal menyimpan perubahan.");
+   893→   893→    } finally {
+   894→   894→      setSaving(false);
+   895→   895→    }
+   896→   896→  };
+   897→   897→
+   898→   898→  const remove = async () => {
+   899→   899→    if (!confirming) {
+   900→   900→      setConfirming(true);
+   901→   901→      return;
+   902→   902→    }
+   903→   903→    try {
+   904→   904→      const res = await fetch(`/api/logs/${log.id}`, { method: "DELETE" });
+   905→   905→      if (!res.ok) throw new Error();
+   906→   906→      onDeleted(log.id);
+   907→   907→      toast.success("Catatan dihapus.");
+   908→   908→    } catch {
+   909→   909→      toast.error("Gagal menghapus. Coba lagi.");
+   910→   910→      setConfirming(false);
+   911→   911→    }
+   912→   912→  };
+   913→   913→
+   914→   914→  const day = dateKey(log.date);
+   915→   915→  const dayLabel =
+   916→   916→    relativeDayLabel(day) ??
+   917→   917→    new Date(`${day}T00:00:00`).toLocaleDateString("id-ID", {
+   918→   918→      day: "numeric",
+   919→   919→      month: "short",
+   920→   920→    });
+   921→   921→  const weekday = WEEKDAY_KANJI[new Date(`${day}T00:00:00`).getDay()];
+   922→   922→
+   923→   923→  if (editing) {
+   924→   924→    return (
+   925→   925→      <li
+   926→   926→        className="rounded-[3px] border border-foreground/30 bg-card p-4"
+   927→   927→        onKeyDown={(e) => {
+   928→   928→          // Escape leaves edit mode without saving — focus returns to "ubah".
+   929→   929→          if (e.key === "Escape" && !e.nativeEvent.isComposing) {
+   930→   930→            e.preventDefault();
+   931→   931→            cancelEdit();
+   932→   932→          }
+   933→   933→        }}
+   934→   934→      >
+   935→   935→        <div className="space-y-4">
+   936→   936→          <div className="grid gap-4 sm:grid-cols-2">
+   937→   937→            <input
+   938→   938→              value={draft.actorName}
+   939→   939→              onChange={(e) => setDraft({ ...draft, actorName: e.target.value })}
+   940→   940→              aria-label="Nama/Divisi"
+   941→   941→              className={underlineInput}
+   942→   942→              autoFocus
+   943→   943→            />
+   944→   944→            <input
+   945→   945→              value={draft.durationHours}
+   946→   946→              onChange={(e) => setDraft({ ...draft, durationHours: e.target.value })}
+   947→   947→              type="text"
+   948→   948→              inputMode="decimal"
+   949→   949→              autoComplete="off"
+   950→   950→              aria-label="Durasi (jam)"
+   951→   951→              className={`${underlineInput} tabular-nums`}
+   952→   952→            />
+   953→   953→          </div>
+   954→   954→          <input
+   955→   955→            value={draft.title}
+   956→   956→            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+   957→   957→            aria-label="Apa yang dilatih"
+   958→   958→            className={underlineInput}
+   959→   959→          />
+   960→   960→          {/* re-date support — mirrors the main form's quiet date row */}
+   961→   961→          <div className="flex flex-wrap items-center gap-3">
+   962→   962→            <label
+   963→   963→              htmlFor={`edit-date-${log.id}`}
+   964→   964→              className="text-xs text-muted-foreground"
+   965→   965→            >
+   966→   966→              Tanggal
+   967→   967→            </label>
+   968→   968→            <input
+   969→   969→              id={`edit-date-${log.id}`}
+   970→   970→              type="date"
+   971→   971→              value={draft.date}
+   972→   972→              max={toDateKey(new Date())}
+   973→   973→              onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+   974→   974→              className="h-9 rounded-[3px] border border-foreground/15 bg-card/70 px-2 text-sm tabular-nums shadow-none outline-none transition-colors focus:border-seal"
+   975→   975→            />
+   976→   976→          </div>
+   977→   977→          <textarea
+   978→   978→            value={draft.notes}
+   979→   979→            onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+   980→   980→            rows={3}
+   981→   981→            aria-label="Catatan"
+   982→   982→            className="w-full resize-y rounded-[3px] border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none transition-colors focus:border-seal"
+   983→   983→          />
+   984→   984→          {editError && (
+   985→   985→            <p role="alert" className="text-sm text-destructive">
+   986→   986→              {editError}
+   987→   987→            </p>
+   988→   988→          )}
+   989→   989→          <div className="flex items-center justify-end gap-4">
+   990→   990→            <button type="button" onClick={cancelEdit} className={textLink}>
+   991→   991→              batal
+   992→   992→            </button>
+   993→   993→            <button
+   994→   994→              type="button"
+   995→   995→              onClick={saveEdit}
+   996→   996→              disabled={saving}
+   997→   997→              className="rounded-sm text-xs font-semibold underline underline-offset-2 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+   998→   998→            >
+   999→   999→              {saving ? "menyimpan…" : "simpan"}
+  1000→  1000→            </button>
+  1001→  1001→          </div>
+  1002→  1002→        </div>
+  1003→  1003→      </li>
+  1004→  1004→    );
+  1005→  1005→  }
+  1006→  1006→
+  1007→  1007→  return (
+  1008→  1008→    <li
+  1009→  1009→      id={`log-${log.id}`}
+  1010→  1010→      className={`rounded-[3px] border bg-card p-4 transition-colors hover:border-foreground/30 ${
+  1011→  1011→        justAdded ? "entry-flash border-seal/40" : "border-foreground/10"
+  1012→  1012→      }`}
+  1013→  1013→    >
+  1014→  1014→      <div className="flex items-baseline justify-between gap-3">
+  1015→  1015→        <p className="break-words font-serif text-sm font-bold">{log.actorName}</p>
+  1016→  1016→        <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
+  1017→  1017→          <span aria-hidden className="font-kanji mr-1.5 text-[11px] text-seal/75">
+  1018→  1018→            {weekday}
+  1019→  1019→          </span>
+  1020→  1020→          {dayLabel} · {formatDuration(log.durationMin)}
+  1021→  1021→        </p>
+  1022→  1022→      </div>
+  1023→  1023→      <p className="mt-1 break-words text-sm">{log.title}</p>
+  1024→  1024→      {log.notes && (
+  1025→  1025→        <p className="mt-1.5 whitespace-pre-line break-words text-sm text-muted-foreground">{log.notes}</p>
+  1026→  1026→      )}
+  1027→  1027→      {log.imagePath && (
+  1028→  1028→        <a
+  1029→  1029→          href={log.imagePath}
+  1030→  1030→          target="_blank"
+  1031→  1031→          rel="noreferrer"
+  1032→  1032→          className={`group mt-4 block ${
+  1033→  1033→            // Prints taped into a Showa photo album: a hairline white frame,
+  1034→  1034→            // the faintest tilt, straightening on hover.
+  1035→  1035→            log.id.charCodeAt(0) % 2 === 0 ? "-rotate-[0.4deg]" : "rotate-[0.4deg]"
+  1036→  1036→          } transition-transform hover:rotate-0 motion-reduce:rotate-0 motion-reduce:transition-none`}
+  1037→  1037→        >
+  1038→  1038→          <img
+  1039→  1039→            src={log.imagePath}
+  1040→  1040→            alt={`Foto latihan ${log.title}`}
+  1041→  1041→            loading="lazy"
+  1042→  1042→            className="w-full rounded-[2px] border border-foreground/15 bg-white p-1 shadow-[0_1px_4px_rgba(60,50,30,0.10)] transition-opacity hover:opacity-90"
+  1043→  1043→          />
+  1044→  1044→        </a>
+  1045→  1045→      )}
+  1046→  1046→      <div className="mt-3 flex justify-end gap-4">
+  1047→  1047→        <CopyEntryButton log={log} />
+  1048→  1048→        <button
+  1049→  1049→          type="button"
+  1050→  1050→          ref={editButtonRef}
+  1051→  1051→          onClick={startEdit}
+  1052→  1052→          className={textLink}
+  1053→  1053→        >
+  1054→  1054→          ubah
+  1055→  1055→        </button>
+  1056→  1056→        <button
+  1057→  1057→          type="button"
+  1058→  1058→          onClick={remove}
+  1059→  1059→          onBlur={() => setConfirming(false)}
+  1060→  1060→          className={`${textLink} ${confirming ? "text-destructive hover:text-destructive" : ""}`}
+  1061→  1061→        >
+  1062→  1062→          {confirming ? "yakin? klik lagi" : "hapus"}
+  1063→  1063→        </button>
+  1064→  1064→      </div>
+  1065→  1065→    </li>
+  1066→  1066→  );
+  1067→  1067→}
+  1068→  1068→
+  1069→  1069→/* ---------- Image helper ---------- */
+  1070→  1070→
+  1071→  1071→/** Downscale to max 1600px JPEG 0.85 in the browser. Returns null on failure. */
+  1072→  1072→async function downscaleImage(file: File): Promise<File | null> {
+  1073→  1073→  try {
+  1074→  1074→    const bitmap = await createImageBitmap(file);
+  1075→  1075→    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  1076→  1076→    const w = Math.round(bitmap.width * scale);
+  1077→  1077→    const h = Math.round(bitmap.height * scale);
+  1078→  1078→
+  1079→  1079→    const canvas = document.createElement("canvas");
+  1080→  1080→    canvas.width = w;
+  1081→  1081→    canvas.height = h;
+  1082→  1082→    const ctx = canvas.getContext("2d");
+  1083→  1083→    if (!ctx) return file;
+  1084→  1084→    ctx.drawImage(bitmap, 0, 0, w, h);
+  1085→  1085→    bitmap.close();
+  1086→  1086→
+  1087→  1087→    const blob = await new Promise<Blob | null>((resolve) =>
+  1088→  1088→      canvas.toBlob(resolve, "image/jpeg", 0.85)
+  1089→  1089→    );
+  1090→  1090→    if (!blob) return file;
+  1091→  1091→    return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", {
+  1092→  1092→      type: "image/jpeg",
+  1093→  1093→    });
+  1094→  1094→  } catch {
+  1095→  1095→    return file; // fall back to the original file
+  1096→  1096→  }
+  1097→  1097→}
+  1098→  1098→
