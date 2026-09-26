@@ -45,10 +45,33 @@ export function dateKey(iso: string): string {
   return iso.slice(0, 10);
 }
 
-/** Parse "YYYY-MM-DD" into a local Date (midnight, local time). */
+/** Parse "YYYY-MM-DD" into a local-midnight Date (midnight, local time). */
 export function parseDateKey(key: string): Date {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+/** Strict "YYYY-MM-DD" -> local-midnight Date; null if the calendar date is invalid. */
+export function parseLocalDate(key: string): Date | null {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(y, (m ?? 1) - 1, d ?? 1);
+  if (
+    date.getFullYear() !== y ||
+    date.getMonth() !== (m ?? 1) - 1 ||
+    date.getDate() !== d
+  ) {
+    return null;
+  }
+  return date;
+}
+
+/** Feed order: date desc, then newest-created first. */
+export function sortFeedLogs(logs: PracticeLog[]): PracticeLog[] {
+  return [...logs].sort((a, b) => {
+    const byDate = b.date.localeCompare(a.date);
+    if (byDate !== 0) return byDate;
+    return b.createdAt.localeCompare(a.createdAt);
+  });
 }
 
 function pad(n: number): string {
@@ -170,5 +193,21 @@ export function buildMonthSummary(month: MonthGroup): string {
     }
   }
 
+  return lines.join("\n");
+}
+
+/** Single-entry recap for quick sharing into a chat. */
+export function buildEntrySummary(log: PracticeLog): string {
+  const day = new Date(`${dateKey(log.date)}T00:00:00`).toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const lines = [
+    `${log.actorName} — ${day}`,
+    `${log.title} · ${formatDuration(log.durationMin)}`,
+  ];
+  if (log.notes.trim()) lines.push(log.notes.trim());
   return lines.join("\n");
 }

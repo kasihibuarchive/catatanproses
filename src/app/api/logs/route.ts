@@ -5,6 +5,7 @@ import path from "path";
 import sharp from "sharp";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { parseLocalDate } from "@/lib/panggung";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,19 +42,7 @@ const logSchema = z.object({
     .optional(),
 });
 
-/** Parse "YYYY-MM-DD" into a local-midnight Date; null if the calendar date is invalid. */
-function parseLocalDate(key: string): Date | null {
-  const [y, m, d] = key.split("-").map(Number);
-  const date = new Date(y, (m ?? 1) - 1, d ?? 1);
-  if (
-    date.getFullYear() !== y ||
-    date.getMonth() !== (m ?? 1) - 1 ||
-    date.getDate() !== d
-  ) {
-    return null;
-  }
-  return date;
-}
+/** Parse "YYYY-MM-DD" into a local-midnight Date; shared with PATCH via @/lib/panggung. */
 
 function getString(form: FormData, key: string): string | null {
   const value = form.get(key);

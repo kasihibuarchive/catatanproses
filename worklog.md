@@ -233,3 +233,28 @@ Stage Summary:
 - Fitur aktif kini: catat hari ini/backdate + kicker kanji dinamis, pakai-lagi, feed bulan→pekan (double-rule, count orang+foto), salin ringkasan + WhatsApp + GAMBAR PNG, ubah inline, hapus dua-langkah, foto ala cetakan album, kanji hari per entri, PWA hanko, OG card, footer ↑ atas.
 - Prinsip desain tetap terkunci: washi/sumi/shu, Zen fonts, .font-kanji, hairline borders, link teks kecil lowercase — tanpa kategori/mood/intensitas/dialog/chart/tema gelap.
 - Ide kandidat ronde berikutnya: service worker offline ringan; indikator kecil "hari ini" pada strip kalender mini per pekan (opsional); penyimpanan filter? TIDAK — jaga tetap minimum; paling layak: SW offline + polish a11y fokus saat edit.
+
+---
+Task ID: cron-review-8
+Agent: main (Z.ai Code, webDevReview cron)
+Task: QA rutin + pengembangan lanjutan (desain Jepang minimalis terkunci).
+
+Work Log:
+- QA awal: server hidup, DB bersih, lint bersih.
+- Fitur baru — UBAH TANGGAL SAAT EDIT ENTRI (re-date):
+  - PATCH /api/logs/[id] kini menerima `date` opsional (regex YYYY-MM-DD + parseLocalDate + tolak masa depan — miror POST). `parseLocalDate` dipindah ke @/lib/panggung dan dipakai ulang kedua route.
+  - UI edit: baris tenang "Tanggal" + input date (max=hari ini, styling sama dengan form utama) di bawah judul.
+  - handleUpdated kini RE-SORT feed (sortFeedLogs, diekstrak dari handleCreated) — entri yang di-date ulang pindah pekan tanpa reload + flash vermillion & scroll-into-view sebagai umpan balik.
+  - Terverifikasi E2E: entri "Hari ini" di-edit → 20 Sep → pindah dari pekan 21–27 ke 14–20 Sep, label "6 hari lalu"; API: PATCH 2027-01-01 → 400 "Tanggal tidak boleh di masa depan."
+- Fitur baru — SALIN PER ENTRI: link kecil "salin" di kartu (samping ubah/hapus) — menyalin rekap satu entri via buildEntrySummary (baru di lib): "Nama — Sabtu, 26 September 2026\\nJudul · 2 jam\\ncatatan". Terverifikasi via stub clipboard.
+- A11y / styling detail:
+  - Skip link "Langsung ke isi" (sr-only, muncul saat keyboard focus, outline seal, target #konten-utama dengan tabIndex=-1).
+  - Tombol Kirim: aria-keyshortcuts="Meta+Enter Control+Enter" + title pintasan.
+  - Aksi kartu kini: salin · ubah · hapus (konsisten textLink).
+- Verifikasi: lint 0 masalah; console bersih; data tes dihapus (DB 0 baris, uploads kosong, localStorage dibersihkan).
+
+Stage Summary:
+- Perubahan API bersifat aditif: PATCH kini menerima `date` opsional; kontrak lain tetap (durationMin menit, POST multipart +date).
+- Helper lib baru: parseLocalDate, sortFeedLogs, buildEntrySummary.
+- Fitur aktif kini: catat hari ini/backdate, pakai-lagi, feed bulan→pekan (re-sort instan saat edit tanggal), salin ringkasan bulan + WhatsApp + gambar PNG, salin per entri, ubah inline (termasuk tanggal), hapus dua-langkah, foto ala cetakan album, kanji hari, PWA hanko, OG card, skip link.
+- Ide kandidat ronde berikutnya: service worker offline ringan (satu-satunya kandidat besar tersisa); sisanya polish kecil — mis. judul halaman dinamis saat offline, atau tidy-up sebelum serah terima ke user.

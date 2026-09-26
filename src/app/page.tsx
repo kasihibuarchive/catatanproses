@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ACTOR_NAME_STORAGE_KEY,
+  buildEntrySummary,
   buildMonthSummary,
   dateKey,
   formatDuration,
@@ -18,6 +19,7 @@ import {
   monthActorCount,
   monthPhotoCount,
   monthSessionCount,
+  sortFeedLogs,
   toDateKey,
   WEEKDAY_KANJI,
   type MonthGroup,
@@ -61,13 +63,7 @@ export default function Page() {
     setLogs((prev) => {
       // Insert in feed order (date desc, createdAt desc) so backdated
       // entries land in the right place instead of always on top.
-      const next = [...prev, log];
-      next.sort((a, b) => {
-        const byDate = b.date.localeCompare(a.date);
-        if (byDate !== 0) return byDate;
-        return b.createdAt.localeCompare(a.createdAt);
-      });
-      return next;
+      return sortFeedLogs([...prev, log]);
     });
     setJustAddedId(log.id);
     window.setTimeout(() => {
@@ -83,7 +79,16 @@ export default function Page() {
   }, []);
 
   const handleUpdated = useCallback((updated: PracticeLog) => {
-    setLogs((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+    // Re-sort so a re-dated entry moves to its right place in the feed,
+    // then flash + scroll to it so the move is noticeable.
+    setLogs((prev) => sortFeedLogs(prev.map((l) => (l.id === updated.id ? updated : l))));
+    setJustAddedId(updated.id);
+    window.setTimeout(() => {
+      setJustAddedId((current) => (current === updated.id ? null : current));
+      document
+        .getElementById(`log-${updated.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 120);
   }, []);
 
   const totalMin = logs.reduce((sum, l) => sum + l.durationMin, 0);
@@ -91,6 +96,13 @@ export default function Page() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
+      {/* skip link for keyboard users */}
+      <a
+        href="#konten-utama"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-[3px] focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-sm focus:outline-2 focus:outline-offset-2 focus:outline-seal"
+      >
+        Langsung ke isi
+      </a>
       {/* washi paper grain */}
       <div aria-hidden className="washi-grain pointer-events-none fixed inset-0 -z-10" />
       {/* vertical tategaki accent, wide screens only */}
@@ -129,7 +141,7 @@ export default function Page() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-5">
+      <main id="konten-utama" tabIndex={-1} className="mx-auto w-full max-w-2xl flex-1 px-5 focus:outline-none">
         {/* Form */}
         <LogForm onCreated={handleCreated} lastLog={logs[0] ?? null} />
 
@@ -628,6 +640,8 @@ function LogForm({
         <Button
           type="submit"
           disabled={submitting}
+          aria-keyshortcuts="Meta+Enter Control+Enter"
+          title="Pintasan: Ctrl/⌘ + Enter"
           className="w-full tracking-wide sm:w-auto sm:min-w-36"
         >
           {submitting ? "Mengirim…" : "Kirim"}
@@ -638,6 +652,28 @@ function LogForm({
 }
 
 /* ---------- Log row ---------- */
+
+/** Quiet link that copies one entry's recap into the clipboard. */
+function CopyEntryButton({ log }: { log: PracticeLog }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(buildEntrySummary(log));
+      toast.success("Catatan disalin.");
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      toast.error("Gagal menyalin.");
+    }
+  };
+
+  return (
+    <button type="button" onClick={copy} className={textLink}>
+      {copied ? "tersalin" : "salin"}
+    </button>
+  );
+}
 
 function relativeDayLabel(day: string): string | null {
   const today = toDateKey(new Date());
@@ -670,6 +706,7 @@ function LogRow({
     title: log.title,
     durationHours: minutesToHoursInput(log.durationMin),
     notes: log.notes,
+    date: dateKey(log.date),
   });
 
   const startEdit = () => {
@@ -678,6 +715,7 @@ function LogRow({
       title: log.title,
       durationHours: minutesToHoursInput(log.durationMin),
       notes: log.notes,
+      date: dateKey(log.date),
     });
     setEditError(null);
     setConfirming(false);
@@ -690,6 +728,7 @@ function LogRow({
     const minutes = hoursToMinutes(draft.durationHours);
     if (!name) return setEditError("Nama tidak boleh kosong.");
     if (!title) return setEditError("Judul tidak boleh kosong.");
+    if (!draft.date) return setEditError("Tanggal wajib ada.");
     if (minutes === null || minutes < 1) {
       return setEditError("Isi durasi (jam).");
     }
@@ -700,6 +739,7 @@ function LogRow({
     setSaving(true);
     setEditError(null);
     try {
+      const dateChanged = draft.date !== dateKey(log.date);
       const res = await fetch(`/api/logs/${log.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -708,6 +748,7 @@ function LogRow({
           title,
           durationMin: minutes,
           notes: draft.notes.trim(),
+          ...(dateChanged ? { date: draft.date } : {}),
         }),
       });
       const data = (await res.json().catch(() => null)) as
@@ -779,6 +820,23 @@ function LogRow({
             aria-label="Apa yang dilatih"
             className={underlineInput}
           />
+          {/* re-date support — mirrors the main form's quiet date row */}
+          <div className="flex flex-wrap items-center gap-3">
+            <label
+              htmlFor={`edit-date-${log.id}`}
+              className="text-xs text-muted-foreground"
+            >
+              Tanggal
+            </label>
+            <input
+              id={`edit-date-${log.id}`}
+              type="date"
+              value={draft.date}
+              max={toDateKey(new Date())}
+              onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+              className="h-9 rounded-[3px] border border-foreground/15 bg-card/70 px-2 text-sm tabular-nums shadow-none outline-none transition-colors focus:border-seal"
+            />
+          </div>
           <textarea
             value={draft.notes}
             onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
@@ -849,6 +907,7 @@ function LogRow({
         </a>
       )}
       <div className="mt-3 flex justify-end gap-4">
+        <CopyEntryButton log={log} />
         <button type="button" onClick={startEdit} className={textLink}>
           ubah
         </button>
