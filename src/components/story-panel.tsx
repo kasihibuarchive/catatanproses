@@ -15,6 +15,11 @@ import {
 /** Thumbnail pemilih templat dirender sekali (data contoh) lalu dicache. */
 const thumbCache = new Map<string, string>();
 
+/** Kunci cache thumbnail: templat + foto catatan (templat foto ikut foto asli). */
+function thumbKey(tplId: string, photoUrl: string | null): string {
+  return `${tplId}|${photoUrl ?? ""}`;
+}
+
 /**
  * Panel inline (bukan dialog) untuk memilih templat story ala Strava:
  * pratinjau 9:16 + unduh PNG 1080×1920.
@@ -26,32 +31,36 @@ export function StoryPanel({ log }: { log: PracticeLog }) {
   const [busy, setBusy] = useState(false);
   const previewUrlRef = useRef<string | null>(null);
 
-  // Thumbnails — sekali per mount, dari cache bila sudah ada.
+  // Thumbnails — sekali per mount (ulang hanya saat foto catatan berubah).
+  // 4 templat ilustrasi pakai data contoh; 2 templat foto render foto asli.
   useEffect(() => {
     let alive = true;
     (async () => {
-      const missing = STORY_TEMPLATES.filter((t) => !thumbCache.has(t.id));
-      if (missing.length === 0) {
-        if (alive) {
-          setThumbUrls(Object.fromEntries(thumbCache));
-        }
-        return;
-      }
+      const photoData = storyDataFromLog(log);
       const sample = storySampleData();
-      for (const t of missing) {
+      const entries: [string, string][] = [];
+      for (const t of STORY_TEMPLATES) {
+        const key = thumbKey(t.id, photoData.photoUrl);
+        const cached = thumbCache.get(key);
+        if (cached) {
+          entries.push([t.id, cached]);
+          continue;
+        }
         try {
-          const url = await renderStoryDataUrl(t.id, sample, 0.1);
-          thumbCache.set(t.id, url);
+          const data = t.needsPhoto ? photoData : sample;
+          const url = await renderStoryDataUrl(t.id, data, 0.1);
+          thumbCache.set(key, url);
+          entries.push([t.id, url]);
         } catch {
           // Thumbnail gagal — biarkan tombol placeholder.
         }
       }
-      if (alive) setThumbUrls(Object.fromEntries(thumbCache));
+      if (alive) setThumbUrls(Object.fromEntries(entries));
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [log]);
 
   // Pratinjau mengikuti templat terpilih (skala 0.36 → 389×691, cukup tajam).
   useEffect(() => {
@@ -127,8 +136,8 @@ export function StoryPanel({ log }: { log: PracticeLog }) {
         templat story · 1080×1920
       </p>
 
-      {/* pemilih templat */}
-      <div className="mt-2.5 flex gap-2" role="group" aria-label="Pilih templat story">
+      {/* pemilih templat — bisa digeser di layar sempit */}
+      <div className="mt-2.5 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Pilih templat story">
         {STORY_TEMPLATES.map((t) => {
           const active = t.id === tplId;
           const thumb = thumbUrls[t.id];
@@ -180,6 +189,11 @@ export function StoryPanel({ log }: { log: PracticeLog }) {
             </span>
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">{meta.hint}</p>
+          {meta.needsPhoto && !log.imagePath && (
+            <p className="mt-1.5 text-[11px] text-muted-foreground/80">
+              catatan ini belum ada fotonya — pratinjau memakai contoh latar.
+            </p>
+          )}
           <button
             type="button"
             onClick={download}

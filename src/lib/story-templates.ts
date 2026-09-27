@@ -7,11 +7,13 @@ import {
 
 /**
  * Story templates (1080×1920, 9:16) — ala Strava story share, tapi washi:
- * ILUSTRASI = main objek, mengisi kanvas penuh (perangko 切手 raksasa, patung
- * 地蔵 besar, lemari 押入れ, tategaki 父と暮らせば). Data entri hadir sebagai
- * OVERLAY semi-transparan di bawah — duduk DI ATAS gambar, bukan blok terpisah.
- * Semua ilustrasi digambar manual di canvas (gaya sumi hand-drawn, sedikit
- * getar acak supaya terasa cetak tangan — tiap render unik seperti kayu blok).
+ * 6 templat = 4 ILUSTRASI (perangko 切手 raksasa, patung 地蔵 besar, lemari
+ * 押入れ, tategaki 父と暮らせば — semua digambar manual di canvas, gaya sumi
+ * hand-drawn dengan getar acak supaya terasa cetak tangan) + 2 FOTO UPLOAD
+ * (foto latihan dari catatan jadi latar full-bleed, ditimpa agak gelap, lalu
+ * data entri ditimpa di atasnya ala Strava — panel washi terang, atau teks
+ * krem langsung di atas foto gelap). Data entri hadir sebagai OVERLAY di
+ * bawah — duduk DI ATAS gambar, bukan blok terpisah.
  * Client-only: dijalankan setelah klik, tidak pernah saat SSR.
  */
 
@@ -66,10 +68,12 @@ function sp(ctx: CanvasRenderingContext2D, px: string): void {
 /* ---------- registry & data ---------- */
 
 export interface StoryTemplateMeta {
-  id: "kitte" | "jizo" | "oshiire" | "chichi";
+  id: "kitte" | "jizo" | "oshiire" | "chichi" | "foto" | "sayonara";
   name: string;
   kanji: string;
   hint: string;
+  /** Templat ini memakai foto upload dari catatan sebagai latar. */
+  needsPhoto?: boolean;
 }
 
 export const STORY_TEMPLATES: StoryTemplateMeta[] = [
@@ -77,13 +81,19 @@ export const STORY_TEMPLATES: StoryTemplateMeta[] = [
   { id: "jizo", name: "Patung Jizō", kanji: "地蔵", hint: "patung Jizō raksasa, sketsa sumi" },
   { id: "oshiire", name: "Oshiire", kanji: "押入", hint: "noren & lemari panggung terbuka" },
   { id: "chichi", name: "Chichi to Kuraseba", kanji: "父", hint: "父と暮らせば tategaki 昭和23年" },
+  { id: "foto", name: "Foto + panel", kanji: "写真", hint: "foto latihan jadi latar + panel data", needsPhoto: true },
+  { id: "sayonara", name: "Foto gelap", kanji: "夜", hint: "foto digelapkan, info langsung di foto ala Strava", needsPhoto: true },
 ];
+
+/** Templat yang melukis foto upload sebagai main objek. */
+const PHOTO_TEMPLATES = new Set(["foto", "sayonara"]);
 
 export interface StoryData {
   actorName: string;
   title: string;
   dayKey: string; // "YYYY-MM-DD"
   notes: string;
+  photoUrl: string | null; // foto upload dari catatan (imagePath)
 }
 
 export function storyDataFromLog(log: PracticeLog): StoryData {
@@ -92,6 +102,7 @@ export function storyDataFromLog(log: PracticeLog): StoryData {
     title: log.title,
     dayKey: dateKey(log.date),
     notes: log.notes.trim(),
+    photoUrl: log.imagePath ?? null,
   };
 }
 
@@ -104,6 +115,7 @@ export function storySampleData(): StoryData {
     title: "Latihan orkestrasi adegan 2",
     dayKey: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
     notes: "SFX hujan masuk terlalu pagi; tarik tempo sebelum dialog penutup.",
+    photoUrl: null,
   };
 }
 
@@ -343,6 +355,99 @@ function drawHanko(
   ctx.textAlign = "left";
 }
 
+/* ---------- foto upload (main objek untuk templat foto) ---------- */
+
+/**
+ * Muat foto upload via fetch→blob agar aman CORS (Vercel Blob mengizinkan
+ * `*`; /uploads lokal same-origin). Gagal (offline/CORS) → null, templat
+ * melukis latar placeholder.
+ */
+async function loadPhoto(url: string): Promise<HTMLImageElement | null> {
+  try {
+    const res = await fetch(url, {
+      mode: "cors",
+      cache: "force-cache",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!blob.type.startsWith("image/")) return null;
+    const objUrl = URL.createObjectURL(blob);
+    try {
+      return await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("foto gagal dimuat"));
+        img.src = objUrl;
+      });
+    } finally {
+      URL.revokeObjectURL(objUrl);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** Gambar foto menutupi rect (object-fit: cover), fokus sedikit ke atas. */
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+): void {
+  const ir = img.naturalWidth / img.naturalHeight;
+  const cr = w / h;
+  let sx = 0;
+  let sy = 0;
+  let sw = img.naturalWidth;
+  let sh = img.naturalHeight;
+  if (ir > cr) {
+    sw = sh * cr; // foto lebih lebar — potong sisi
+    sx = (img.naturalWidth - sw) / 2;
+  } else {
+    sh = sw / cr; // foto lebih tinggi — potong bawah/atas (bias 40% dari atas)
+    sy = (img.naturalHeight - sh) * 0.4;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+}
+
+/** Latar placeholder saat catatan belum punya foto. */
+function paintPhotoPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  C: Palette,
+  dark: boolean
+): void {
+  if (dark) {
+    ctx.fillStyle = C.closetDark;
+    ctx.fillRect(0, 0, W, H);
+  } else {
+    paintWashi(ctx, C);
+  }
+  const fx = 150;
+  const fy = 300;
+  const fw = W - 300;
+  const fh = 900;
+  ctx.save();
+  ctx.strokeStyle = dark ? "rgba(246, 242, 231, 0.35)" : C.muted;
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 2;
+  if (typeof ctx.setLineDash === "function") ctx.setLineDash([16, 14]);
+  ctx.strokeRect(fx, fy, fw, fh);
+  ctx.setLineDash([]);
+  ctx.globalAlpha = dark ? 0.16 : 0.2;
+  ctx.fillStyle = dark ? C.bg : C.ink;
+  ctx.font = `400 150px ${C.mincho}`;
+  ctx.textAlign = "center";
+  ctx.fillText("写真", W / 2, fy + fh / 2 - 20);
+  ctx.globalAlpha = dark ? 0.45 : 0.5;
+  ctx.font = `400 27px ${C.gothic}`;
+  ctx.fillText("foto latihan", W / 2, fy + fh / 2 + 70);
+  ctx.restore();
+  ctx.textAlign = "left";
+}
+
 /* ---------- OVERLAY ala Strava (duduk di atas gambar) ---------- */
 
 /**
@@ -434,6 +539,161 @@ function drawOverlay(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): v
   ctx.fillText("CATATAN PROSES JIZO", PX + PW - 44, bottomY);
   ctx.textAlign = "left";
   sp(ctx, "0px");
+}
+
+/**
+ * Overlay versi gelap (templat sayonara): info ditulis LANGSUNG di atas
+ * foto yang sudah digelapkan — persis gaya share story Strava. Teks krem,
+ * hanko vermillion tetap terbaca di atas gelap.
+ */
+function drawOverlayDark(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): void {
+  const MX = 76; // margin kiri/kanan
+  const iw = W - MX * 2;
+  const cream = "#f6f2e7";
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+
+  /* --- atas --- */
+  ctx.fillStyle = cream;
+  ctx.globalAlpha = 0.85;
+  ctx.font = `500 17px ${C.gothic}`;
+  sp(ctx, "6px");
+  ctx.fillText("CATATAN PROSES JIZO", MX, 108);
+  sp(ctx, "0px");
+  ctx.globalAlpha = 1;
+
+  drawHanko(ctx, C, W - MX - 42, 118, 84, ["地", "蔵"]);
+
+  /* --- blok bawah, dari bawah ke atas --- */
+  const bottomY = H - 72;
+
+  // baris penutup: pepatah kiri · tanggal 和暦 kanan
+  ctx.fillStyle = cream;
+  ctx.globalAlpha = 0.6;
+  ctx.font = `400 22px ${C.mincho}`;
+  sp(ctx, "4px");
+  ctx.fillText("継続は力なり", MX, bottomY);
+  sp(ctx, "0px");
+  ctx.font = `400 19px ${C.mincho}`;
+  ctx.textAlign = "right";
+  ctx.fillText(warekiDate(d.dayKey), W - MX, bottomY);
+  ctx.textAlign = "left";
+  ctx.globalAlpha = 1;
+
+  // catatan — maks 2 baris
+  let y = bottomY - 44;
+  if (d.notes) {
+    ctx.fillStyle = cream;
+    ctx.globalAlpha = 0.72;
+    ctx.font = `400 25px ${C.gothic}`;
+    const lines = wrapText(ctx, d.notes, iw, 2);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      ctx.fillText(lines[i], MX, y);
+      y -= 38;
+    }
+    y -= 14;
+  }
+  ctx.globalAlpha = 1;
+
+  // judul — mincho besar, maks 2 baris
+  ctx.fillStyle = cream;
+  ctx.font = `400 52px ${C.mincho}`;
+  const titleLines = wrapText(ctx, d.title, iw, 2);
+  for (let i = titleLines.length - 1; i >= 0; i--) {
+    ctx.fillText(titleLines[i], MX, y);
+    y -= 64;
+  }
+  y -= 16;
+
+  // meta: weekday kanji vermillion + tanggal
+  const weekday = WEEKDAY_KANJI[new Date(`${d.dayKey}T00:00:00`).getDay()];
+  const shortDate = new Date(`${d.dayKey}T00:00:00`).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  ctx.fillStyle = C.seal;
+  ctx.font = `400 30px ${C.mincho}`;
+  ctx.fillText(weekday, MX, y);
+  const wW = ctx.measureText(weekday).width;
+  ctx.fillStyle = cream;
+  ctx.globalAlpha = 0.85;
+  ctx.font = `400 24px ${C.gothic}`;
+  ctx.fillText(` · ${shortDate}`, MX + wW + 10, y - 2);
+  ctx.globalAlpha = 1;
+  y -= 34;
+
+  // nama paling atas blok
+  ctx.fillStyle = cream;
+  ctx.font = `700 40px ${C.gothic}`;
+  ctx.fillText(wrapKeep(ctx, d.actorName, iw)[0] ?? "", MX, y);
+}
+
+/* ---------- TEMPLAT 5: 写真 — foto upload full-bleed + panel data ---------- */
+
+function paintFoto(
+  ctx: CanvasRenderingContext2D,
+  C: Palette,
+  d: StoryData,
+  photo: HTMLImageElement | null
+): void {
+  if (!photo) {
+    paintPhotoPlaceholder(ctx, C, false);
+  } else {
+    // foto menutup kanvas penuh
+    drawCover(ctx, photo, 0, 0, W, H);
+
+    // ditimpa agak gelap: wash tipis + gradasi bawah untuk panel
+    ctx.fillStyle = "rgba(18, 14, 9, 0.22)";
+    ctx.fillRect(0, 0, W, H);
+    const grad = ctx.createLinearGradient(0, 900, 0, H);
+    grad.addColorStop(0, "rgba(18, 14, 9, 0)");
+    grad.addColorStop(1, "rgba(18, 14, 9, 0.52)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 900, W, H - 900);
+
+    // butir washi tipis di atas foto — menyatu dengan identitas
+    for (let i = 0; i < 700; i++) {
+      ctx.fillStyle = `rgba(246, 242, 231, ${(0.015 + Math.random() * 0.02).toFixed(3)})`;
+      ctx.fillRect(Math.random() * W, Math.random() * H, 1.5, 1.5);
+    }
+  }
+}
+
+/* ---------- TEMPLAT 6: 夜 — foto gelap, info langsung di foto ---------- */
+
+function paintSayonara(
+  ctx: CanvasRenderingContext2D,
+  C: Palette,
+  d: StoryData,
+  photo: HTMLImageElement | null
+): void {
+  if (!photo) {
+    paintPhotoPlaceholder(ctx, C, true);
+  } else {
+    drawCover(ctx, photo, 0, 0, W, H);
+
+    // gelap menyeluruh sedikit lebih kuat + gradasi atas & bawah (ala Strava)
+    ctx.fillStyle = "rgba(18, 14, 9, 0.30)";
+    ctx.fillRect(0, 0, W, H);
+    const top = ctx.createLinearGradient(0, 0, 0, 340);
+    top.addColorStop(0, "rgba(18, 14, 9, 0.42)");
+    top.addColorStop(1, "rgba(18, 14, 9, 0)");
+    ctx.fillStyle = top;
+    ctx.fillRect(0, 0, W, 340);
+    const bottom = ctx.createLinearGradient(0, 860, 0, H);
+    bottom.addColorStop(0, "rgba(18, 14, 9, 0)");
+    bottom.addColorStop(0.55, "rgba(18, 14, 9, 0.42)");
+    bottom.addColorStop(1, "rgba(18, 14, 9, 0.78)");
+    ctx.fillStyle = bottom;
+    ctx.fillRect(0, 860, W, H - 860);
+
+    for (let i = 0; i < 700; i++) {
+      ctx.fillStyle = `rgba(246, 242, 231, ${(0.015 + Math.random() * 0.02).toFixed(3)})`;
+      ctx.fillRect(Math.random() * W, Math.random() * H, 1.5, 1.5);
+    }
+  }
 }
 
 /* ---------- patung Jizo (sketsa sumi, bisa diskalakan) ---------- */
@@ -1075,14 +1335,20 @@ async function preparePalette(): Promise<Palette> {
   };
 }
 
-const PAINTERS: Record<
-  string,
-  (ctx: CanvasRenderingContext2D, C: Palette, d: StoryData) => void
-> = {
+type Painter = (
+  ctx: CanvasRenderingContext2D,
+  C: Palette,
+  d: StoryData,
+  photo: HTMLImageElement | null
+) => void;
+
+const PAINTERS: Record<string, Painter> = {
   kitte: paintKitte,
   jizo: paintJizo,
   oshiire: paintOshiire,
   chichi: paintChichi,
+  foto: paintFoto,
+  sayonara: paintSayonara,
 };
 
 export async function renderStoryCanvas(
@@ -1100,9 +1366,17 @@ export async function renderStoryCanvas(
   ctx.scale(scale, scale);
   ctx.textBaseline = "alphabetic";
 
+  const isPhoto = PHOTO_TEMPLATES.has(templateId);
+  // Foto upload dimuat SEBELUM melukis; gagal → templat pakai latar placeholder.
+  const photo =
+    isPhoto && data.photoUrl ? await loadPhoto(data.photoUrl) : null;
+
   paintWashi(ctx, C);
-  (PAINTERS[templateId] ?? paintJizo)(ctx, C, data); // GAMBAR = main objek
-  drawOverlay(ctx, C, data); // data entri menimpa gambar, ala Strava
+  (PAINTERS[templateId] ?? paintJizo)(ctx, C, data, photo); // GAMBAR = main objek
+  // data entri menimpa gambar, ala Strava — panel terang, atau teks langsung
+  // di atas foto gelap untuk templat sayonara.
+  if (templateId === "sayonara") drawOverlayDark(ctx, C, data);
+  else drawOverlay(ctx, C, data);
   return canvas;
 }
 
