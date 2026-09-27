@@ -1,6 +1,5 @@
 import {
   dateKey,
-  formatDuration,
   WEEKDAY_KANJI,
   warekiDate,
   type PracticeLog,
@@ -8,7 +7,9 @@ import {
 
 /**
  * Story templates (1080×1920, 9:16) — ala Strava story share, tapi washi:
- * perangko 切手, patung 地蔵, lemari 押入れ, dan tategaki 父と暮らせば.
+ * ILUSTRASI = main objek, mengisi kanvas penuh (perangko 切手 raksasa, patung
+ * 地蔵 besar, lemari 押入れ, tategaki 父と暮らせば). Data entri hadir sebagai
+ * OVERLAY semi-transparan di bawah — duduk DI ATAS gambar, bukan blok terpisah.
  * Semua ilustrasi digambar manual di canvas (gaya sumi hand-drawn, sedikit
  * getar acak supaya terasa cetak tangan — tiap render unik seperti kayu blok).
  * Client-only: dijalankan setelah klik, tidak pernah saat SSR.
@@ -16,8 +17,6 @@ import {
 
 const W = 1080;
 const H = 1920;
-const M = 96; // margin kiri/kanan
-const CONTENT_W = W - M * 2;
 
 /* ---------- palette & fonts ---------- */
 
@@ -46,7 +45,7 @@ async function ensureFonts(mincho: string, gothic: string): Promise<void> {
     await Promise.all([
       document.fonts.load(
         `400 170px ${mincho}`,
-        "地蔵日誌父と暮らせば押入切手稽古参郵便継続は力なり昭和令和年月日時古の一日"
+        "地蔵日誌父と暮らせば押入切手稽古の一日郵便参昭和年月日水金火継続は力なり井上ひさし作"
       ),
       document.fonts.load(`700 40px ${gothic}`, "September 2026 0123456789"),
       document.fonts.load(`400 26px ${gothic}`, "sesi orang jam •—·()"),
@@ -74,10 +73,10 @@ export interface StoryTemplateMeta {
 }
 
 export const STORY_TEMPLATES: StoryTemplateMeta[] = [
-  { id: "kitte", name: "Perangko", kanji: "切手", hint: "perangko 稽古 + cap pos Jizo" },
-  { id: "jizo", name: "Patung Jizō", kanji: "地蔵", hint: "sketsa sumi di lapangan" },
-  { id: "oshiire", name: "Oshiire", kanji: "押入", hint: "noren & fusuma backstage" },
-  { id: "chichi", name: "Chichi to Kuraseba", kanji: "父", hint: "父と暮らせば tategaki" },
+  { id: "kitte", name: "Perangko", kanji: "切手", hint: "perangko 稽古 raksasa + cap pos Jizo" },
+  { id: "jizo", name: "Patung Jizō", kanji: "地蔵", hint: "patung Jizō raksasa, sketsa sumi" },
+  { id: "oshiire", name: "Oshiire", kanji: "押入", hint: "noren & lemari panggung terbuka" },
+  { id: "chichi", name: "Chichi to Kuraseba", kanji: "父", hint: "父と暮らせば tategaki 昭和23年" },
 ];
 
 export interface StoryData {
@@ -85,7 +84,6 @@ export interface StoryData {
   title: string;
   dayKey: string; // "YYYY-MM-DD"
   notes: string;
-  durationText: string | null; // "1,5 jam" | null
 }
 
 export function storyDataFromLog(log: PracticeLog): StoryData {
@@ -94,8 +92,6 @@ export function storyDataFromLog(log: PracticeLog): StoryData {
     title: log.title,
     dayKey: dateKey(log.date),
     notes: log.notes.trim(),
-    durationText:
-      log.durationMin !== null ? formatDuration(log.durationMin) : null,
   };
 }
 
@@ -107,9 +103,7 @@ export function storySampleData(): StoryData {
     actorName: "Bana — divisi sound",
     title: "Latihan orkestrasi adegan 2",
     dayKey: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
-    notes:
-      "SFX hujan masuk terlalu pagi; tarik tempo jeda sebelum dialog penutup.",
-    durationText: "1,5 jam",
+    notes: "SFX hujan masuk terlalu pagi; tarik tempo sebelum dialog penutup.",
   };
 }
 
@@ -161,6 +155,10 @@ function wrapText(
   }
   kept[maxLines - 1] = `${last}…`;
   return kept;
+}
+
+function wrapKeep(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+  return wrapText(ctx, text, maxW, 1);
 }
 
 type Pt = [number, number];
@@ -272,7 +270,34 @@ function drawGrass(ctx: CanvasRenderingContext2D, C: Palette, x: number, y: numb
   }
 }
 
-/* ---------- elemen bersama ---------- */
+/** Awan bergaris ala Hiroshige (3 goresan panjang melengkung). */
+function drawClouds(ctx: CanvasRenderingContext2D, C: Palette, y0: number): void {
+  for (const [dy, x1, x2] of [[0, 110, 640], [56, 320, 980], [112, 160, 780]] as [number, number, number][]) {
+    inkStroke(
+      ctx,
+      () => wobblePath(ctx, [[x1, y0 + dy], [x1 + (x2 - x1) * 0.4, y0 + dy - 7], [x2, y0 + dy + 3]], 3),
+      C,
+      { w: 3, color: C.muted, alpha: 0.38 }
+    );
+  }
+}
+
+/** Matahari pucat (piringan vermillion transparan + lingkar tipis). */
+function drawPaleSun(ctx: CanvasRenderingContext2D, C: Palette, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.fillStyle = C.seal;
+  ctx.globalAlpha = 0.15;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.3;
+  ctx.strokeStyle = C.seal;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
 
 function paintWashi(ctx: CanvasRenderingContext2D, C: Palette): void {
   ctx.fillStyle = C.bg;
@@ -281,41 +306,6 @@ function paintWashi(ctx: CanvasRenderingContext2D, C: Palette): void {
     ctx.fillStyle = `rgba(70, 58, 34, ${(0.015 + Math.random() * 0.02).toFixed(3)})`;
     ctx.fillRect(Math.random() * W, Math.random() * H, 1.6, 1.6);
   }
-}
-
-function drawHeader(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): void {
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = C.ink;
-  ctx.font = `400 42px ${C.mincho}`;
-  sp(ctx, "6px");
-  ctx.fillText("地蔵日誌", M, 128);
-  sp(ctx, "0px");
-
-  ctx.fillStyle = C.muted;
-  ctx.font = `500 18px ${C.gothic}`;
-  sp(ctx, "8px");
-  ctx.fillText("CATATAN PROSES JIZO", M + 2, 168);
-  sp(ctx, "0px");
-
-  const weekday = WEEKDAY_KANJI[new Date(`${d.dayKey}T00:00:00`).getDay()];
-  ctx.textAlign = "right";
-  ctx.fillStyle = C.seal;
-  ctx.font = `400 40px ${C.mincho}`;
-  ctx.fillText(weekday, W - M, 126);
-
-  ctx.fillStyle = C.muted;
-  ctx.font = `400 21px ${C.mincho}`;
-  ctx.fillText(warekiDate(d.dayKey), W - M, 166);
-  ctx.textAlign = "left";
-
-  // garis ganda tebal-tipis, cetakan Showa
-  ctx.fillStyle = C.seal;
-  ctx.globalAlpha = 0.85;
-  ctx.fillRect(M, 200, CONTENT_W, 3);
-  ctx.globalAlpha = 0.4;
-  ctx.fillRect(M, 208, CONTENT_W, 1);
-  ctx.globalAlpha = 1;
 }
 
 function drawHanko(
@@ -353,99 +343,100 @@ function drawHanko(
   ctx.textAlign = "left";
 }
 
-function drawFooter(ctx: CanvasRenderingContext2D, C: Palette): void {
-  ctx.fillStyle = C.ink;
-  ctx.globalAlpha = 0.85;
-  ctx.font = `400 27px ${C.mincho}`;
-  sp(ctx, "6px");
-  ctx.fillText("継続は力なり", M, 1846);
-  sp(ctx, "0px");
+/* ---------- OVERLAY ala Strava (duduk di atas gambar) ---------- */
+
+/**
+ * Panel data semi-transparan di sepertiga bawah — mengenai gambar di
+ * baliknya. Semua templat memakai panel yang sama (konsisten seperti
+ * overlay Strava), jadi pembeda antar templat murni ilustrasinya.
+ */
+function drawOverlay(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): void {
+  const PX = 48;
+  const PY = 1382;
+  const PW = 984;
+  const PH = 452;
+  const ix = PX + 44; // indent teks
+  const iw = PW - 88; // lebar teks
+  const nameMaxW = iw - 104; // sisakan ruang hanko kanan
+
+  // panel wash + bingkai rambut
+  ctx.fillStyle = "rgba(249, 245, 233, 0.92)";
+  ctx.fillRect(PX, PY, PW, PH);
+  ctx.strokeStyle = C.ink;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.35;
+  ctx.strokeRect(PX + 0.5, PY + 0.5, PW - 1, PH - 1);
   ctx.globalAlpha = 1;
-  ctx.fillStyle = C.muted;
-  ctx.font = `400 16px ${C.gothic}`;
-  ctx.fillText("Keizoku wa chikara nari", M, 1880);
-  drawHanko(ctx, C, W - M - 36, 1846, 74, ["地", "蔵"]);
-}
 
-/** Blok info entri di bagian bawah (semua templat). */
-function drawEntryBlock(
-  ctx: CanvasRenderingContext2D,
-  C: Palette,
-  d: StoryData,
-  x: number,
-  y0: number,
-  maxW: number
-): void {
+  // garis ganda tebal-tipis vermillion di atas panel
+  ctx.fillStyle = C.seal;
+  ctx.fillRect(PX, PY, PW, 4);
+  ctx.globalAlpha = 0.45;
+  ctx.fillRect(PX, PY + 8, PW, 1.5);
+  ctx.globalAlpha = 1;
+
   ctx.textAlign = "left";
-  ctx.fillStyle = C.ink;
-  ctx.font = `700 36px ${C.gothic}`;
-  ctx.fillText(wrapKeep(ctx, d.actorName, maxW)[0] ?? "", x, y0);
+  ctx.textBaseline = "alphabetic";
 
+  // nama
+  ctx.fillStyle = C.ink;
+  ctx.font = `700 38px ${C.gothic}`;
+  ctx.fillText(wrapKeep(ctx, d.actorName, nameMaxW)[0] ?? "", ix, PY + 94);
+
+  // hanko mini kanan-atas
+  drawHanko(ctx, C, PX + PW - 80, PY + 90, 66, ["地", "蔵"]);
+
+  // meta: weekday kanji + tanggal
   const weekday = WEEKDAY_KANJI[new Date(`${d.dayKey}T00:00:00`).getDay()];
   const shortDate = new Date(`${d.dayKey}T00:00:00`).toLocaleDateString("id-ID", {
     day: "numeric",
     month: "short",
     year: "numeric",
   });
-  ctx.font = `400 26px ${C.gothic}`;
+  ctx.font = `400 27px ${C.mincho}`;
+  ctx.fillStyle = C.seal;
+  ctx.fillText(weekday, ix, PY + 140);
+  const wW = ctx.measureText(weekday).width;
   ctx.fillStyle = C.muted;
-  const meta = `${weekday} · ${shortDate}`;
-  ctx.fillText(meta, x, y0 + 52);
-  if (d.durationText) {
-    ctx.fillStyle = C.seal;
-    ctx.font = `700 26px ${C.gothic}`;
-    ctx.fillText(`· ${d.durationText}`, x + ctx.measureText(meta).width + 14, y0 + 52);
-  }
+  ctx.font = `400 23px ${C.gothic}`;
+  ctx.fillText(` · ${shortDate}`, ix + wW + 8, PY + 138);
 
+  // judul (what was practised) — mincho besar, maks 2 baris
   ctx.fillStyle = C.ink;
-  ctx.font = `400 46px ${C.mincho}`;
-  const titleLines = wrapText(ctx, d.title, maxW, 2);
-  titleLines.forEach((line, i) => ctx.fillText(line, x, y0 + 130 + i * 62));
+  ctx.font = `400 50px ${C.mincho}`;
+  const titleLines = wrapText(ctx, d.title, iw, 2);
+  const titleBase = PY + 212;
+  titleLines.forEach((line, i) => ctx.fillText(line, ix, titleBase + i * 62));
 
+  // catatan — maks 2 baris
   if (d.notes) {
     ctx.fillStyle = C.muted;
-    ctx.font = `400 27px ${C.gothic}`;
-    const notesY = y0 + 130 + titleLines.length * 62 + 22;
-    wrapText(ctx, d.notes, maxW, 3).forEach((line, i) =>
-      ctx.fillText(line, x, notesY + i * 40)
+    ctx.font = `400 25px ${C.gothic}`;
+    const notesY = titleBase + titleLines.length * 62 + 16;
+    wrapText(ctx, d.notes, iw, 2).forEach((line, i) =>
+      ctx.fillText(line, ix, notesY + i * 38)
     );
   }
-}
 
-function wrapKeep(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
-  return wrapText(ctx, text, maxW, 1);
-}
-
-/** Braket sudut 【 】 di sekeliling area blok entri. */
-function drawBrackets(
-  ctx: CanvasRenderingContext2D,
-  C: Palette,
-  x: number,
-  y: number,
-  w: number,
-  h: number
-): void {
-  const l = 42;
-  ctx.strokeStyle = C.ink;
-  ctx.lineWidth = 2.5;
+  // baris bawah panel: pepatah kiri, merek kanan
+  const bottomY = PY + PH - 34;
+  ctx.fillStyle = C.ink;
   ctx.globalAlpha = 0.55;
-  const corners: [number, number, number, number][] = [
-    [x, y + l, x, y, x + l, y],
-    [x + w - l, y, x + w, y, x + w, y + l],
-    [x + w, y + h - l, x + w, y + h, x + w - l, y + h],
-    [x + l, y + h, x, y + h, x, y + h - l],
-  ];
-  for (const [x1, y1, x2, y2, x3, y3] of corners) {
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.lineTo(x3, y3);
-    ctx.stroke();
-  }
+  ctx.font = `400 22px ${C.mincho}`;
+  sp(ctx, "4px");
+  ctx.fillText("継続は力なり", ix, bottomY);
+  sp(ctx, "0px");
   ctx.globalAlpha = 1;
+  ctx.fillStyle = C.muted;
+  ctx.font = `500 14px ${C.gothic}`;
+  sp(ctx, "6px");
+  ctx.textAlign = "right";
+  ctx.fillText("CATATAN PROSES JIZO", PX + PW - 44, bottomY);
+  ctx.textAlign = "left";
+  sp(ctx, "0px");
 }
 
-/* ---------- patung Jizo (sketsa sumi penuh) ---------- */
+/* ---------- patung Jizo (sketsa sumi, bisa diskalakan) ---------- */
 
 function drawJizoStatue(ctx: CanvasRenderingContext2D, C: Palette, cx: number, groundY: number, s: number): void {
   // halo ganda
@@ -584,7 +575,7 @@ function drawJizoStatue(ctx: CanvasRenderingContext2D, C: Palette, cx: number, g
   );
 }
 
-/** Patung Jizo versi duduk kecil (dalam oshiire). */
+/** Patung Jizo versi duduk kecil (dalam oshiire / di atas rak). */
 function drawJizoMini(ctx: CanvasRenderingContext2D, C: Palette, cx: number, baseY: number, s: number): void {
   inkStroke(ctx, () => wobbleCircle(ctx, cx, baseY - 120 * s, 34 * s, 1.5), C, { w: 4, fill: C.bg });
   for (const ex of [cx - 12 * s, cx + 12 * s]) {
@@ -634,20 +625,22 @@ function drawJizoMini(ctx: CanvasRenderingContext2D, C: Palette, cx: number, bas
   );
 }
 
-/* ---------- TEMPLAT 1: 切手 (perangko) ---------- */
+/* ---------- TEMPLAT 1: 切手 — perangko raksasa sebagai main objek ---------- */
 
 function paintKitte(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): void {
-  const SX = 150;
-  const SY = 340;
-  const SW = 780;
-  const SH = 880;
+  const SX = 120;
+  const SY = 205;
+  const SW = 840;
+  const SH = 1005;
 
-  // kertas perangko + lubang perforasi
+  // kertas perangko
   ctx.fillStyle = C.paper;
   ctx.fillRect(SX, SY, SW, SH);
+
+  // lubang perforasi: pukul lingkaran warna latar di keliling
   ctx.fillStyle = C.bg;
-  const holeR = 20;
-  const step = 46;
+  const holeR = 15;
+  const step = 42;
   for (let x = SX + step / 2; x < SX + SW; x += step) {
     ctx.beginPath();
     ctx.arc(x, SY, holeR, 0, Math.PI * 2);
@@ -661,6 +654,13 @@ function paintKitte(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): vo
     ctx.fill();
   }
 
+  // bayangan cetak tipis di bawah perangko (felem offset)
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(SX + 10, SY + SH + 6, SW, 8);
+  ctx.restore();
+
   // bingkai ganda dalam
   ctx.strokeStyle = C.ink;
   ctx.lineWidth = 2.5;
@@ -673,95 +673,65 @@ function paintKitte(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): vo
 
   // kop dalam perangko
   ctx.fillStyle = C.ink;
-  ctx.font = `400 26px ${C.mincho}`;
+  ctx.font = `400 27px ${C.mincho}`;
   sp(ctx, "6px");
-  ctx.fillText("地蔵郵便", SX + 72, SY + 92);
+  ctx.fillText("地蔵郵便", SX + 72, SY + 90);
   sp(ctx, "0px");
   ctx.fillStyle = C.muted;
-  ctx.font = `500 16px ${C.gothic}`;
+  ctx.font = `500 14px ${C.gothic}`;
   sp(ctx, "5px");
   ctx.textAlign = "right";
-  ctx.fillText("JIZO POST", SX + SW - 72, SY + 88);
+  ctx.fillText("JIZO POST", SX + SW - 72, SY + 86);
   ctx.textAlign = "left";
   sp(ctx, "0px");
 
-  // nilai nominal di kiri-atas (jauh dari cap pos): durasi sbg mata uang,
-  // tanpa durasi = 参 (hadir)
+  // nominal: kanji hari dalam medali vermillion (nilai perangko)
+  const weekday = WEEKDAY_KANJI[new Date(`${d.dayKey}T00:00:00`).getDay()];
+  const mx = SX + 128;
+  const my = SY + 226;
   ctx.fillStyle = C.seal;
-  if (d.durationText) {
-    const hours = parseHoursFromText(d.durationText);
-    const hoursLabel =
-      hours !== null
-        ? String(parseFloat(hours.toFixed(2))).replace(".", ",")
-        : "1";
-    ctx.font = `400 62px ${C.mincho}`;
-    ctx.fillText(hoursLabel, SX + 72, SY + 188);
-    const hw = ctx.measureText(hoursLabel).width;
-    ctx.font = `400 27px ${C.mincho}`;
-    ctx.fillText("時間", SX + 72 + hw + 10, SY + 188);
-  } else {
-    ctx.font = `400 56px ${C.mincho}`;
-    ctx.fillText("参", SX + 72, SY + 184);
-  }
+  ctx.beginPath();
+  ctx.arc(mx, my, 58, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = C.paper;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.arc(mx, my, 46, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = C.paper;
+  ctx.font = `400 52px ${C.mincho}`;
+  ctx.textAlign = "center";
+  ctx.fillText(weekday, mx, my + 19);
+  ctx.textAlign = "left";
 
-  // kanji utama perangko
-  ctx.fillStyle = C.ink;
-  ctx.font = `400 300px ${C.mincho}`;
-  sp(ctx, "24px");
-  ctx.fillText("稽", SX + 96, SY + 560);
-  sp(ctx, "0px");
+  // ILUSTRASI UTAMA: patung Jizo berdiri di lapangan, di dalam perangko
+  const s = 0.6;
+  const gcx = SX + SW / 2;
+  const groundY = SY + SH - 140;
+  drawJizoStatue(ctx, C, gcx, groundY, s);
+  drawGrass(ctx, C, gcx - 200, groundY - 2, 30);
+  drawGrass(ctx, C, gcx + 205, groundY + 4, 26);
+  drawGrass(ctx, C, SX + 92, groundY + 6, 22);
+  drawBird(ctx, C, SX + SW - 150, SY + 210, 20);
+
+  // tanggal + 参 (hadir) di dalam perangko
   ctx.fillStyle = C.muted;
-  ctx.font = `400 24px ${C.gothic}`;
-  ctx.fillText("keiko — latihan", SX + 102, SY + 612);
+  ctx.font = `400 23px ${C.mincho}`;
+  ctx.fillText(warekiDate(d.dayKey), SX + 72, SY + SH - 70);
+  ctx.fillStyle = C.seal;
+  ctx.globalAlpha = 0.85;
+  ctx.font = `400 44px ${C.mincho}`;
+  ctx.textAlign = "right";
+  ctx.fillText("参", SX + SW - 72, SY + SH - 66);
+  ctx.textAlign = "left";
+  ctx.globalAlpha = 1;
 
-  // sketsa dada Jizo kecil di kanan bawah
-  const jx = SX + SW - 190;
-  const jy = SY + SH - 120;
-  inkStroke(ctx, () => wobbleCircle(ctx, jx, jy - 70, 42, 1.5), C, { w: 4, fill: C.bg });
-  inkStroke(
-    ctx,
-    () =>
-      wobblePath(
-        ctx,
-        [
-          [jx - 44, jy - 42],
-          [jx + 44, jy - 42],
-          [jx + 58, jy + 40],
-          [jx - 58, jy + 40],
-        ],
-        2,
-        true
-      ),
-    C,
-    { w: 4.5, fill: C.bg }
-  );
-  inkStroke(
-    ctx,
-    () =>
-      wobblePath(
-        ctx,
-        [
-          [jx - 32, jy - 46],
-          [jx + 32, jy - 46],
-          [jx + 40, jy - 4],
-          [jx - 40, jy - 4],
-        ],
-        1.5,
-        true
-      ),
-    C,
-    { w: 3, color: C.seal, alpha: 0.8 }
-  );
-
-  // tanggal di dalam perangko
-  ctx.fillStyle = C.muted;
-  ctx.font = `400 24px ${C.mincho}`;
-  ctx.fillText(warekiDate(d.dayKey), SX + 72, SY + SH - 74);
-
-  // ---- cap pos (postmark) menimpa sisi kanan perangko ----
+  // ---- cap pos menimpa sisi kanan perangko ----
   ctx.save();
-  ctx.translate(SX + SW - 30, SY + 150);
-  ctx.rotate(-0.2);
+  ctx.translate(SX + SW - 30, SY + 280);
+  ctx.rotate(-0.18);
   ctx.globalAlpha = 0.85;
   ctx.strokeStyle = C.seal;
   ctx.fillStyle = C.seal;
@@ -770,65 +740,74 @@ function paintKitte(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): vo
   ctx.lineWidth = 5;
   for (let i = 0; i < 7; i++) {
     ctx.beginPath();
-    ctx.moveTo(-370, -48 + i * 16);
-    ctx.lineTo(-160, -48 + i * 16);
+    ctx.moveTo(-350, -48 + i * 16);
+    ctx.lineTo(-150, -48 + i * 16);
     ctx.stroke();
   }
   // lingkaran ganda
   ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.arc(0, 0, 118, 0, Math.PI * 2);
+  ctx.arc(0, 0, 112, 0, Math.PI * 2);
   ctx.stroke();
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.arc(0, 0, 100, 0, Math.PI * 2);
+  ctx.arc(0, 0, 95, 0, Math.PI * 2);
   ctx.stroke();
   // isi cap
   ctx.textAlign = "center";
-  ctx.font = `500 24px ${C.gothic}`;
+  ctx.font = `500 22px ${C.gothic}`;
   sp(ctx, "4px");
-  ctx.fillText("JIZO", 0, -34);
+  ctx.fillText("JIZO", 0, -32);
   sp(ctx, "0px");
   const [y, m, day] = d.dayKey.split("-");
-  ctx.font = `400 30px ${C.gothic}`;
+  ctx.font = `400 29px ${C.gothic}`;
   ctx.fillText(`${Number(y)}.${Number(m)}.${Number(day)}`, 0, 6);
-  ctx.font = `400 20px ${C.mincho}`;
-  ctx.fillText("地蔵日誌", 0, 44);
+  ctx.font = `400 19px ${C.mincho}`;
+  ctx.fillText("地蔵日誌", 0, 42);
   ctx.textAlign = "left";
   ctx.restore();
 
-  // blok entri
-  drawEntryBlock(ctx, C, d, M, 1400, CONTENT_W);
+  // sempit antara perangko & overlay: tanda update
+  ctx.fillStyle = C.muted;
+  ctx.globalAlpha = 0.6;
+  ctx.font = `400 23px ${C.mincho}`;
+  sp(ctx, "10px");
+  ctx.textAlign = "center";
+  ctx.fillText("稽古切手 · 一筆参上", W / 2, 1306);
+  ctx.textAlign = "left";
+  sp(ctx, "0px");
+  ctx.globalAlpha = 1;
 }
 
-/** Ambil angka jam dari "1,5 jam" / "45 mnt" / "2 jam 5 mnt" (untuk nominal). */
-function parseHoursFromText(text: string): number | null {
-  const jamMatch = text.match(/^([\d,\.]+)\s+jam/);
-  if (jamMatch) {
-    const n = Number(jamMatch[1].replace(",", "."));
-    return Number.isNaN(n) ? null : n;
-  }
-  const mntMatch = text.match(/^(\d+)\s+mnt/);
-  if (mntMatch) return Number(mntMatch[1]) / 60;
-  return null;
-}
-
-/* ---------- TEMPLAT 2: 地蔵 (patung) ---------- */
+/* ---------- TEMPLAT 2: 地蔵 — patung raksasa sebagai main objek ---------- */
 
 function paintJizo(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): void {
-  // tanah
+  // langit
+  drawPaleSun(ctx, C, 205, 285, 105);
+  drawClouds(ctx, C, 470);
+  drawBird(ctx, C, 790, 300, 26);
+  drawBird(ctx, C, 862, 258, 19);
+
+  // tanah + gema garis
   inkStroke(
     ctx,
-    () => wobblePath(ctx, [[130, 1250], [520, 1244], [950, 1252]], 3),
+    () => wobblePath(ctx, [[90, 1268], [420, 1262], [760, 1270], [990, 1264]], 3),
     C,
     { w: 7, alpha: 0.85 }
   );
-  drawGrass(ctx, C, 205, 1246, 26);
-  drawGrass(ctx, C, 848, 1250, 22);
-  drawBird(ctx, C, 770, 330, 26);
-  drawBird(ctx, C, 845, 292, 19);
+  inkStroke(
+    ctx,
+    () => wobblePath(ctx, [[170, 1316], [560, 1310], [920, 1318]], 3),
+    C,
+    { w: 3, alpha: 0.3 }
+  );
+  drawGrass(ctx, C, 205, 1262, 34);
+  drawGrass(ctx, C, 862, 1272, 30);
+  drawGrass(ctx, C, 130, 1308, 24);
+  drawGrass(ctx, C, 935, 1316, 22);
 
-  drawJizoStatue(ctx, C, 540, 1236, 1);
+  // MAIN OBJEK: patung Jizō raksasa
+  drawJizoStatue(ctx, C, 540, 1250, 1.42);
 
   // aksen tategaki di tepi kanan
   ctx.save();
@@ -836,102 +815,112 @@ function paintJizo(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): voi
   ctx.globalAlpha = 0.12;
   ctx.font = `400 44px ${C.mincho}`;
   ctx.textAlign = "center";
-  "地蔵日誌".split("").forEach((ch, i) => ctx.fillText(ch, 1006, 420 + i * 66));
+  "地蔵日誌".split("").forEach((ch, i) => ctx.fillText(ch, 1012, 430 + i * 66));
   ctx.restore();
   ctx.textAlign = "left";
-
-  drawEntryBlock(ctx, C, d, M, 1400, CONTENT_W);
 }
 
-/* ---------- TEMPLAT 3: 押入れ (lemari) ---------- */
+/* ---------- TEMPLAT 3: 押入れ — noren & lemari full-bleed ---------- */
 
 function paintOshiire(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): void {
-  // noren 稽古の一日
+  // batang noren
+  inkStroke(ctx, () => wobblePath(ctx, [[96, 148], [984, 144]], 2), C, { w: 9 });
+
+  // noren 稽古の一日 — memenuhi lebar kanvas
   const panels = ["稽", "古", "の", "一", "日"];
-  const nx = 150;
-  const nw = 156;
+  const nx = 96;
+  const nw = 178;
   panels.forEach((ch, i) => {
-    const px = nx + i * (nw + 6);
-    const bottom = 432 + (i % 2 === 0 ? 0 : 8) + Math.random() * 4;
+    const px = nx + i * (nw + 4);
+    const bottom = 486 + (i % 2 === 0 ? 0 : 12) + Math.random() * 5;
     ctx.fillStyle = C.closetDark;
     ctx.globalAlpha = 0.94;
-    ctx.fillRect(px, 236, nw, bottom - 236);
+    ctx.fillRect(px, 158, nw, bottom - 158);
     ctx.globalAlpha = 1;
     ctx.fillStyle = C.bg;
-    ctx.font = `400 62px ${C.mincho}`;
+    ctx.font = `400 66px ${C.mincho}`;
     ctx.textAlign = "center";
-    ctx.fillText(ch, px + nw / 2, 372);
+    ctx.fillText(ch, px + nw / 2, 372 + (i % 2 === 0 ? 0 : 8));
     ctx.textAlign = "left";
   });
-  // batang noren
-  inkStroke(ctx, () => wobblePath(ctx, [[128, 240], [952, 238]], 2), C, { w: 8 });
 
-  // bingkai lemari
+  // bingkai lemari besar
   ctx.strokeStyle = C.ink;
-  ctx.lineWidth = 12;
+  ctx.lineWidth = 14;
   ctx.globalAlpha = 0.92;
-  ctx.strokeRect(180, 500, 720, 730);
+  ctx.strokeRect(110, 520, 860, 780);
   ctx.globalAlpha = 1;
 
-  // pintu kiri tertutup
+  // pintu kiri tertutup (fusuma) + pola wajik
   ctx.fillStyle = C.paperDark;
-  ctx.fillRect(192, 512, 336, 706);
+  ctx.fillRect(124, 534, 410, 752);
   ctx.strokeStyle = C.ink;
   ctx.lineWidth = 3;
   ctx.globalAlpha = 0.5;
-  ctx.strokeRect(192, 512, 336, 706);
+  ctx.strokeRect(124, 534, 410, 752);
   ctx.globalAlpha = 1;
+  ctx.save();
+  ctx.fillStyle = C.seal;
+  ctx.globalAlpha = 0.4;
+  for (const [rx, ry] of [[230, 700], [330, 700], [280, 830], [230, 960], [330, 960]] as [number, number][]) {
+    ctx.save();
+    ctx.translate(rx, ry);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-16, -16, 32, 32);
+    ctx.restore();
+  }
+  ctx.restore();
   // hikite (pegangan) vermillion
   ctx.fillStyle = C.seal;
   ctx.beginPath();
-  ctx.arc(496, 862, 17, 0, Math.PI * 2);
+  ctx.arc(502, 908, 16, 0, Math.PI * 2);
   ctx.fill();
 
   // interior terbuka (kanan)
   ctx.fillStyle = C.closetDark;
-  ctx.fillRect(540, 512, 348, 706);
+  ctx.fillRect(548, 534, 408, 752);
   ctx.save();
   ctx.globalAlpha = 0.5;
   ctx.fillStyle = C.ink;
-  ctx.fillRect(540, 512, 14, 706);
+  ctx.fillRect(548, 534, 14, 752);
   ctx.restore();
 
   // sinar lembut dari bukaan
   ctx.save();
   ctx.strokeStyle = C.seal;
-  ctx.globalAlpha = 0.07;
+  ctx.globalAlpha = 0.08;
   ctx.lineWidth = 30;
   ctx.beginPath();
-  ctx.moveTo(560, 560);
-  ctx.lineTo(300, 1290);
+  ctx.moveTo(570, 580);
+  ctx.lineTo(300, 1300);
   ctx.stroke();
-  ctx.lineWidth = 40;
+  ctx.lineWidth = 42;
   ctx.beginPath();
-  ctx.moveTo(700, 600);
-  ctx.lineTo(470, 1290);
+  ctx.moveTo(720, 620);
+  ctx.lineTo(480, 1300);
   ctx.stroke();
   ctx.restore();
 
   // rak + tumpukan naskah
-  inkStroke(ctx, () => wobblePath(ctx, [[552, 1096], [876, 1094]], 2), C, { w: 5 });
+  inkStroke(ctx, () => wobblePath(ctx, [[560, 1102], [944, 1098]], 2), C, { w: 5, color: C.bg, alpha: 0.8 });
   const scripts: [number, number, number][] = [
-    [600, 952, -0.07],
-    [646, 946, 0.05],
-    [622, 960, -0.02],
+    [606, 950, -0.07],
+    [652, 944, 0.05],
+    [628, 958, -0.02],
   ];
   for (const [sx, sy, rot] of scripts) {
     ctx.save();
     ctx.translate(sx, sy);
     ctx.rotate(rot);
     ctx.fillStyle = "#fbf7ea";
-    ctx.fillRect(0, 0, 118, 128);
+    ctx.fillRect(0, 0, 116, 126);
     ctx.strokeStyle = C.ink;
     ctx.lineWidth = 1.5;
     ctx.globalAlpha = 0.35;
     for (let i = 1; i <= 5; i++) {
       ctx.beginPath();
       ctx.moveTo(14, 18 * i + 6);
-      ctx.lineTo(104, 18 * i + 6);
+      ctx.lineTo(102, 18 * i + 6);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
@@ -940,74 +929,130 @@ function paintOshiire(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): 
 
   // gulungan tategu 掛け軸
   ctx.fillStyle = C.paper;
-  ctx.fillRect(742, 560, 120, 330);
+  ctx.fillRect(762, 566, 116, 330);
   ctx.fillStyle = "#6b5a3f";
-  ctx.fillRect(734, 548, 136, 14);
-  ctx.fillRect(734, 880, 136, 14);
+  ctx.fillRect(754, 554, 132, 14);
+  ctx.fillRect(754, 886, 132, 14);
   ctx.fillStyle = C.ink;
-  ctx.font = `400 56px ${C.mincho}`;
+  ctx.font = `400 54px ${C.mincho}`;
   ctx.textAlign = "center";
-  "稽古".split("").forEach((ch, i) => ctx.fillText(ch, 802, 650 + i * 80));
+  "稽古".split("").forEach((ch, i) => ctx.fillText(ch, 820, 656 + i * 80));
   ctx.textAlign = "left";
 
   // jizo mini duduk di rak
-  drawJizoMini(ctx, C, 850, 1088, 1);
+  drawJizoMini(ctx, C, 882, 1094, 0.9);
 
-  drawEntryBlock(ctx, C, d, M, 1400, CONTENT_W);
-}
-
-/* ---------- TEMPLAT 4: 父と暮らせば ---------- */
-
-function paintChichi(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): void {
-  // matahari pucat + awan bergaris ala Hiroshige
+  // lantai: garis tatami
   ctx.save();
-  ctx.fillStyle = C.seal;
-  ctx.globalAlpha = 0.16;
-  ctx.beginPath();
-  ctx.arc(238, 352, 122, 0, Math.PI * 2);
-  ctx.fill();
   ctx.globalAlpha = 0.3;
-  ctx.strokeStyle = C.seal;
+  ctx.strokeStyle = C.ink;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(238, 352, 122, 0, Math.PI * 2);
+  ctx.moveTo(80, 1330);
+  ctx.lineTo(1000, 1326);
+  ctx.stroke();
+  ctx.globalAlpha = 0.18;
+  ctx.beginPath();
+  ctx.moveTo(120, 1356);
+  ctx.lineTo(960, 1352);
   ctx.stroke();
   ctx.restore();
+}
 
-  for (const [y, x1, x2] of [[492, 120, 760], [548, 300, 960], [604, 150, 820]] as [number, number, number][]) {
-    inkStroke(
-      ctx,
-      () => wobblePath(ctx, [[x1, y], [x1 + (x2 - x1) * 0.4, y - 6], [x2, y + 2]], 3),
-      C,
-      { w: 3, color: C.muted, alpha: 0.4 }
-    );
-  }
-  drawBird(ctx, C, 828, 302, 24);
+/* ---------- TEMPLAT 4: 父と暮らせば — tategaki poster 昭和23年 ---------- */
 
-  // tategaki utama 父と暮らせば
+function paintChichi(ctx: CanvasRenderingContext2D, C: Palette, d: StoryData): void {
+  // matahari pucat + awan + burung
+  drawPaleSun(ctx, C, 218, 330, 115);
+  drawClouds(ctx, C, 520);
+  drawBird(ctx, C, 430, 288, 24);
+
+  // MAIN OBJEK: tategaki besar 父と暮らせば
   ctx.fillStyle = C.ink;
-  ctx.font = `400 158px ${C.mincho}`;
+  ctx.font = `400 150px ${C.mincho}`;
   ctx.textAlign = "center";
-  "父と暮らせば".split("").forEach((ch, i) => ctx.fillText(ch, 836, 470 + i * 196));
-  // kana kecil di sisi kiri kolom
+  "父と暮らせば".split("").forEach((ch, i) => ctx.fillText(ch, 806, 300 + i * 186));
+  // kana kecil di kolom samping
   ctx.fillStyle = C.muted;
-  ctx.font = `400 32px ${C.mincho}`;
-  "ちちとくらせば".split("").forEach((ch, i) => ctx.fillText(ch, 700, 462 + i * 58));
+  ctx.font = `400 30px ${C.mincho}`;
+  "ちちとくらせば".split("").forEach((ch, i) => ctx.fillText(ch, 652, 288 + i * 55));
   ctx.textAlign = "left";
 
   // kredit drama + latar era
   ctx.fillStyle = C.muted;
-  ctx.font = `400 27px ${C.mincho}`;
-  ctx.fillText("井上ひさし 作", 152, 700);
-  ctx.font = `400 24px ${C.mincho}`;
-  ctx.fillStyle = C.muted;
+  ctx.font = `400 28px ${C.mincho}`;
+  ctx.fillText("井上ひさし 作", 116, 640);
+  ctx.font = `400 25px ${C.mincho}`;
   ctx.globalAlpha = 0.85;
-  ctx.fillText("昭和二十三年 · 1948", 152, 740);
+  ctx.fillText("昭和二十三年 · 1948", 116, 684);
   ctx.globalAlpha = 1;
 
-  // blok entri dalam braket 【 】
-  drawBrackets(ctx, C, 84, 1330, W - 168, 400);
-  drawEntryBlock(ctx, C, d, M + 22, 1430, CONTENT_W - 60);
+  // lanskap yakeato (bekas terbakar) di bawah: tiang telepon & kabel
+  const poles: [number, number][] = [[172, 1130], [500, 1118], [828, 1130]];
+  for (const [px, py] of poles) {
+    inkStroke(ctx, () => wobblePath(ctx, [[px, py], [px, 1368]], 2), C, { w: 7, alpha: 0.8 });
+    inkStroke(ctx, () => wobblePath(ctx, [[px - 52, py + 26], [px + 52, py + 24]], 1.5), C, { w: 5, alpha: 0.8 });
+    inkStroke(ctx, () => wobblePath(ctx, [[px - 44, py + 58], [px + 44, py + 56]], 1.5), C, { w: 4, alpha: 0.7 });
+  }
+  // kabel melengkung antar tiang
+  inkStroke(
+    ctx,
+    () => {
+      ctx.beginPath();
+      ctx.moveTo(172, 1158);
+      ctx.quadraticCurveTo(336, 1216, 500, 1146);
+      ctx.quadraticCurveTo(664, 1204, 828, 1158);
+    },
+    C,
+    { w: 2.5, alpha: 0.5 }
+  );
+  inkStroke(
+    ctx,
+    () => {
+      ctx.beginPath();
+      ctx.moveTo(172, 1190);
+      ctx.quadraticCurveTo(336, 1250, 500, 1178);
+      ctx.quadraticCurveTo(664, 1238, 828, 1190);
+    },
+    C,
+    { w: 2, alpha: 0.4 }
+  );
+
+  // garis tanah + siluet atap hangus
+  inkStroke(
+    ctx,
+    () => wobblePath(ctx, [[80, 1368], [400, 1362], [700, 1370], [1000, 1364]], 3),
+    C,
+    { w: 5, alpha: 0.7 }
+  );
+  ctx.save();
+  ctx.fillStyle = C.ink;
+  ctx.globalAlpha = 0.16;
+  // puing/atap: segitiga dan kotak rendah
+  ctx.beginPath();
+  ctx.moveTo(96, 1366);
+  ctx.lineTo(150, 1332);
+  ctx.lineTo(204, 1366);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(250, 1340, 74, 26);
+  ctx.beginPath();
+  ctx.moveTo(700, 1366);
+  ctx.lineTo(758, 1330);
+  ctx.lineTo(816, 1366);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(880, 1344, 66, 22);
+  ctx.restore();
+
+  // abu beterbangan
+  ctx.save();
+  ctx.fillStyle = C.muted;
+  for (let i = 0; i < 26; i++) {
+    ctx.globalAlpha = 0.12 + Math.random() * 0.14;
+    ctx.fillRect(120 + Math.random() * 840, 1150 + Math.random() * 200, 2.5, 2.5);
+  }
+  ctx.restore();
 }
 
 /* ---------- orkestrasi render ---------- */
@@ -1056,9 +1101,8 @@ export async function renderStoryCanvas(
   ctx.textBaseline = "alphabetic";
 
   paintWashi(ctx, C);
-  drawHeader(ctx, C, data);
-  (PAINTERS[templateId] ?? paintJizo)(ctx, C, data);
-  drawFooter(ctx, C);
+  (PAINTERS[templateId] ?? paintJizo)(ctx, C, data); // GAMBAR = main objek
+  drawOverlay(ctx, C, data); // data entri menimpa gambar, ala Strava
   return canvas;
 }
 

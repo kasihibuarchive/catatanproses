@@ -1,5 +1,4 @@
 import {
-  formatDuration,
   monthActorCount,
   monthPhotoCount,
   monthSessionCount,
@@ -75,8 +74,8 @@ export async function renderMonthSummaryBlob(month: MonthGroup): Promise<Blob> {
   const people = monthActorCount(month);
   const photos = monthPhotoCount(month);
   const statsLine = `${sessions} sesi${
-    month.totalMin > 0 ? ` · ${formatDuration(month.totalMin)}` : ""
-  }${people > 1 ? ` · ${people} orang` : ""}${photos > 0 ? ` · ${photos} foto` : ""}`;
+    people > 1 ? ` · ${people} orang` : ""
+  }${photos > 0 ? ` · ${photos} foto` : ""}`;
 
   interface Row {
     kind: "week" | "person";
@@ -88,23 +87,16 @@ export async function renderMonthSummaryBlob(month: MonthGroup): Promise<Blob> {
     rows.push({
       kind: "week",
       left: week.range,
-      right: `${week.logs.length} sesi${
-        week.totalMin > 0 ? ` · ${formatDuration(week.totalMin)}` : ""
-      }`,
+      right: `${week.logs.length} sesi`,
     });
-    const byActor = new Map<string, { name: string; min: number }>();
+
+    // Names within the week (case-insensitive, feed order).
+    const seen = new Set<string>();
     for (const log of week.logs) {
       const key = log.actorName.trim().toLowerCase();
-      const entry = byActor.get(key);
-      if (entry) entry.min += log.durationMin ?? 0;
-      else byActor.set(key, { name: log.actorName.trim(), min: log.durationMin ?? 0 });
-    }
-    for (const a of [...byActor.values()].sort((x, y) => y.min - x.min)) {
-      rows.push({
-        kind: "person",
-        left: a.name,
-        right: a.min > 0 ? formatDuration(a.min) : "",
-      });
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({ kind: "person", left: log.actorName.trim(), right: "" });
     }
   }
 

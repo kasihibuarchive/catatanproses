@@ -7,7 +7,7 @@ export interface PracticeLog {
   actorName: string;
   title: string;
   date: string; // ISO
-  durationMin: number | null; // menit — null = tidak dicatat
+  durationMin: number | null; // legacy — durasi sudah dihapus dari aplikasi
   notes: string;
   imagePath: string | null;
   createdAt: string; // ISO
@@ -22,33 +22,7 @@ export const DRAFT_STORAGE_KEY = "panggung.draft";
 export interface FormDraft {
   actorName: string;
   title: string;
-  durationHours: string;
   notes: string;
-}
-
-/** Compact hour-based duration: "45 mnt", "1,5 jam", "2 jam", "2 jam 5 mnt". */
-export function formatDuration(totalMin: number): string {
-  if (totalMin < 60) return `${totalMin} mnt`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  if (m === 0) return `${h} jam`;
-  if (m === 30) return `${h},5 jam`;
-  return `${h} jam ${m} mnt`;
-}
-
-/** Parse hours input ("1,5" / "1.5" / "2") into whole minutes; null if invalid. */
-export function hoursToMinutes(input: string): number | null {
-  const normalized = input.trim().replace(",", ".");
-  if (!normalized) return null;
-  const hours = Number(normalized);
-  if (Number.isNaN(hours)) return null;
-  return Math.round(hours * 60);
-}
-
-/** Minutes -> editable hours string with comma decimal ("90" -> "1,5"). Null -> "". */
-export function minutesToHoursInput(min: number | null | undefined): string {
-  if (min === null || min === undefined) return "";
-  return String(parseFloat((min / 60).toFixed(2))).replace(".", ",");
 }
 
 /** Extract "YYYY-MM-DD" from an ISO datetime string (timezone-shift safe). */
@@ -97,13 +71,11 @@ export interface WeekGroup {
   key: string; // week start "yyyy-MM-dd"
   range: string; // "21–27 Sep"
   logs: PracticeLog[];
-  totalMin: number;
 }
 
 export interface MonthGroup {
   key: string; // "yyyy-MM"
   label: string; // "September 2026"
-  totalMin: number;
   weeks: WeekGroup[];
 }
 
@@ -117,7 +89,7 @@ export function groupByMonthWeek(logs: PracticeLog[]): MonthGroup[] {
 
     let month = months[months.length - 1];
     if (!month || month.key !== monthKey) {
-      month = { key: monthKey, label: monthKey, totalMin: 0, weeks: [] };
+      month = { key: monthKey, label: monthKey, weeks: [] };
       months.push(month);
     }
 
@@ -131,13 +103,11 @@ export function groupByMonthWeek(logs: PracticeLog[]): MonthGroup[] {
       const range = sameMonth
         ? `${format(weekStart, "dd")}–${format(weekEnd, "dd MMM", { locale: localeId })}`
         : `${format(weekStart, "dd MMM", { locale: localeId })} – ${format(weekEnd, "dd MMM", { locale: localeId })}`;
-      week = { key: weekKey, range, logs: [], totalMin: 0 };
+      week = { key: weekKey, range, logs: [] };
       month.weeks.push(week);
     }
 
     week.logs.push(log);
-    week.totalMin += log.durationMin ?? 0;
-    month.totalMin += log.durationMin ?? 0;
   }
 
   for (const month of months) {
@@ -188,39 +158,24 @@ export function monthPhotoCount(month: MonthGroup): number {
 export function buildMonthSummary(month: MonthGroup): string {
   const totalSessions = monthSessionCount(month);
   const actorCount = monthActorCount(month);
-  const totalPart = month.totalMin > 0 ? ` · ${formatDuration(month.totalMin)}` : "";
   const lines: string[] = [
     `Catatan Proses — ${month.label}`,
-    `Total: ${totalSessions} sesi${totalPart}${
+    `Total: ${totalSessions} sesi${
       actorCount > 1 ? ` · ${actorCount} orang` : ""
     }`,
   ];
 
   for (const week of month.weeks) {
     lines.push("");
-    lines.push(
-      `${week.range}: ${week.logs.length} sesi${
-        week.totalMin > 0 ? ` · ${formatDuration(week.totalMin)}` : ""
-      }`
-    );
+    lines.push(`${week.range}: ${week.logs.length} sesi`);
 
-    // Per-person totals within the week (case-insensitive name grouping).
-    const byActor = new Map<string, { name: string; min: number }>();
+    // Names within the week (case-insensitive grouping, feed order).
+    const seen = new Set<string>();
     for (const log of week.logs) {
       const key = log.actorName.trim().toLowerCase();
-      const entry = byActor.get(key);
-      if (entry) {
-        entry.min += log.durationMin ?? 0;
-      } else {
-        byActor.set(key, { name: log.actorName.trim(), min: log.durationMin ?? 0 });
-      }
-    }
-    for (const actor of [...byActor.values()].sort((a, b) => b.min - a.min)) {
-      lines.push(
-        actor.min > 0
-          ? `• ${actor.name} — ${formatDuration(actor.min)}`
-          : `• ${actor.name}`
-      );
+      if (seen.has(key)) continue;
+      seen.add(key);
+      lines.push(`• ${log.actorName.trim()}`);
     }
   }
 
@@ -235,12 +190,7 @@ export function buildEntrySummary(log: PracticeLog): string {
     month: "long",
     year: "numeric",
   });
-  const lines = [
-    `${log.actorName} — ${day}`,
-    log.durationMin !== null
-      ? `${log.title} · ${formatDuration(log.durationMin)}`
-      : log.title,
-  ];
+  const lines = [`${log.actorName} — ${day}`, log.title];
   if (log.notes.trim()) lines.push(log.notes.trim());
   return lines.join("\n");
 }
@@ -253,15 +203,7 @@ function csvCell(value: string): string {
 
 /** Minimal ledger CSV for one month (feed order). BOM is added at download time. */
 export function buildMonthCsv(month: MonthGroup): string {
-  const header = [
-    "tanggal",
-    "nama",
-    "durasi (menit)",
-    "durasi (jam)",
-    "judul",
-    "catatan",
-    "foto",
-  ];
+  const header = ["tanggal", "nama", "judul", "catatan", "foto"];
   const lines = [header.map(csvCell).join(",")];
   for (const week of month.weeks) {
     for (const log of week.logs) {
@@ -269,8 +211,6 @@ export function buildMonthCsv(month: MonthGroup): string {
         [
           dateKey(log.date),
           log.actorName.trim(),
-          log.durationMin === null ? "" : String(log.durationMin),
-          minutesToHoursInput(log.durationMin),
           log.title.trim(),
           log.notes.trim(),
           log.imagePath ?? "",

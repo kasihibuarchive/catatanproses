@@ -14,10 +14,7 @@ import {
   buildMonthSummary,
   dateKey,
   DRAFT_STORAGE_KEY,
-  formatDuration,
   groupByMonthWeek,
-  hoursToMinutes,
-  minutesToHoursInput,
   monthActorCount,
   monthPhotoCount,
   monthSessionCount,
@@ -108,7 +105,6 @@ export default function Page() {
     }, 120);
   }, []);
 
-  const totalMin = logs.reduce((sum, l) => sum + (l.durationMin ?? 0), 0);
   const groups = groupByMonthWeek(logs);
 
   return (
@@ -176,7 +172,7 @@ export default function Page() {
         {/* Summary */}
         {!loading && !error && logs.length > 0 && (
           <p aria-live="polite" className="mb-6 text-sm tabular-nums text-muted-foreground">
-            {logs.length} sesi{totalMin > 0 ? ` · ${formatDuration(totalMin)} total` : ""}
+            {logs.length} sesi
           </p>
         )}
 
@@ -226,9 +222,6 @@ export default function Page() {
                       </span>
                     </h2>
                     <div className="flex shrink-0 items-baseline gap-3">
-                      <p className="text-xs tabular-nums text-muted-foreground">
-                        {month.totalMin > 0 ? formatDuration(month.totalMin) : ""}
-                      </p>
                       <ShareMonthLink month={month} />
                       <span aria-hidden className="text-foreground/20">·</span>
                       <CopyMonthButton month={month} />
@@ -242,7 +235,6 @@ export default function Page() {
                     <div key={week.key} className="mt-5">
                       <p className="text-xs tracking-wide text-muted-foreground">
                         {week.range}
-                        {week.totalMin > 0 ? ` · ${formatDuration(week.totalMin)}` : ""}
                       </p>
                       <ul className="mt-2 space-y-2">
                         {week.logs.map((log) => (
@@ -388,14 +380,6 @@ function CopyMonthButton({ month }: { month: MonthGroup }) {
 
 /* ---------- Form ---------- */
 
-const DURATION_CHIPS: { label: string; hours: number }[] = [
-  { label: "0,5", hours: 0.5 },
-  { label: "1", hours: 1 },
-  { label: "1,5", hours: 1.5 },
-  { label: "2", hours: 2 },
-  { label: "3", hours: 3 },
-];
-
 function LogForm({
   onCreated,
   lastLog,
@@ -405,7 +389,6 @@ function LogForm({
 }) {
   const [actorName, setActorName] = useState("");
   const [title, setTitle] = useState("");
-  const [durationHours, setDurationHours] = useState("");
   const [notes, setNotes] = useState("");
   const [dateValue, setDateValue] = useState(""); // "" = today
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -428,10 +411,9 @@ function LogForm({
       const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
       if (!raw) return;
       const d = JSON.parse(raw) as Partial<FormDraft>;
-      if (!d.title && !d.durationHours && !d.notes) return;
+      if (!d.title && !d.notes) return;
       if (d.actorName) setActorName(d.actorName);
       if (d.title) setTitle(d.title);
-      if (d.durationHours) setDurationHours(d.durationHours);
       if (d.notes) setNotes(d.notes);
       setDraftRestored(true);
     } catch {
@@ -442,16 +424,14 @@ function LogForm({
   // Persist the draft on every keystroke; cleared once the form is empty.
   // Only content fields count — the name alone lives in its own key.
   useEffect(() => {
-    const draft: FormDraft = { actorName, title, durationHours, notes };
-    const hasContent = Boolean(
-      title.trim() || durationHours.trim() || notes.trim()
-    );
+    const draft: FormDraft = { actorName, title, notes };
+    const hasContent = Boolean(title.trim() || notes.trim());
     if (hasContent) {
       window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
     } else {
       window.localStorage.removeItem(DRAFT_STORAGE_KEY);
     }
-  }, [actorName, title, durationHours, notes]);
+  }, [actorName, title, notes]);
 
   const isToday = !dateValue || (todayKey !== "" && dateValue === todayKey);
   const isYesterday =
@@ -460,11 +440,10 @@ function LogForm({
     dateValue === toDateKey(new Date(Date.now() - 86400000));
 
   // "Use last practice" is only useful while the form is still blank.
-  const canReuse = Boolean(lastLog) && !title && !durationHours && !notes;
+  const canReuse = Boolean(lastLog) && !title && !notes;
   const reuseLast = () => {
     if (!lastLog) return;
     setTitle(lastLog.title);
-    setDurationHours(minutesToHoursInput(lastLog.durationMin));
     setNotes(lastLog.notes);
   };
 
@@ -485,7 +464,6 @@ function LogForm({
   const reset = (keepName: boolean) => {
     if (!keepName) setActorName("");
     setTitle("");
-    setDurationHours("");
     setNotes("");
     setDateValue("");
     setShowDatePicker(false);
@@ -499,22 +477,13 @@ function LogForm({
     setFieldError(null);
 
     if (!actorName.trim()) return setFieldError("Isi nama/divisi dulu ya.");
-    if (!title.trim()) return setFieldError("Tulis apa yang dilatih hari ini.");
-    // Durasi sekarang opsional — divalidasi hanya bila diisi.
-    const minutes = durationHours.trim() ? hoursToMinutes(durationHours) : null;
-    if (durationHours.trim() && (minutes === null || minutes < 1)) {
-      return setFieldError("Durasi tidak valid — cth: 1,5");
-    }
-    if (minutes !== null && minutes > 1440) {
-      return setFieldError("Durasi maksimal 24 jam.");
-    }
+    if (!title.trim()) return setFieldError("Tulis ngapain aja hari ini.");
 
     setSubmitting(true);
     try {
       const fd = new FormData();
       fd.set("actorName", actorName.trim());
       fd.set("title", title.trim());
-      if (minutes !== null) fd.set("durationMin", String(minutes));
       fd.set("notes", notes.trim());
       if (!isToday && dateValue) fd.set("date", dateValue);
 
@@ -594,7 +563,6 @@ function LogForm({
             onClick={() => {
               setActorName("");
               setTitle("");
-              setDurationHours("");
               setNotes("");
               setDraftRestored(false);
             }}
@@ -640,59 +608,25 @@ function LogForm({
       </div>
 
       <div className="mt-6 space-y-5">
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="actorName">Nama/Divisi</Label>
-            <Input
-              id="actorName"
-              value={actorName}
-              onChange={(e) => setActorName(e.target.value)}
-              placeholder="cth. Bana — divisi sound"
-              autoComplete="name"
-              className={underlineInput}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="durationHours">
-              Durasi (jam)
-              <span className="ml-1 font-normal text-muted-foreground">· opsional</span>
-            </Label>
-            <Input
-              id="durationHours"
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              value={durationHours}
-              onChange={(e) => setDurationHours(e.target.value)}
-              placeholder="boleh kosong — 1,5"
-              className={`${underlineInput} tabular-nums`}
-            />
-            <div className="flex items-center gap-1">
-              {DURATION_CHIPS.map((chip) => (
-                <button
-                  key={chip.label}
-                  type="button"
-                  onClick={() => setDurationHours(chip.label)}
-                  aria-label={`Set durasi ${chip.label} jam`}
-                  aria-pressed={durationHours === chip.label}
-                  className={`rounded px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
-                    durationHours === chip.label ? "bg-foreground/5 text-foreground" : ""
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="actorName">Nama/Divisi</Label>
+          <Input
+            id="actorName"
+            value={actorName}
+            onChange={(e) => setActorName(e.target.value)}
+            placeholder="cth. Bana — divisi sound"
+            autoComplete="name"
+            className={underlineInput}
+          />
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="title">Apa yang dilatih?</Label>
+          <Label htmlFor="title">Ngapain aja hari ini?</Label>
           <Input
             id="title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="cth. Latihan bloking adegan 3"
+            placeholder="cth. Bloking adegan 3, latihan lagu penutup"
             className={underlineInput}
           />
         </div>
@@ -823,7 +757,6 @@ function LogRow({
   const [draft, setDraft] = useState({
     actorName: log.actorName,
     title: log.title,
-    durationHours: minutesToHoursInput(log.durationMin),
     notes: log.notes,
     date: dateKey(log.date),
   });
@@ -832,7 +765,6 @@ function LogRow({
     setDraft({
       actorName: log.actorName,
       title: log.title,
-      durationHours: minutesToHoursInput(log.durationMin),
       notes: log.notes,
       date: dateKey(log.date),
     });
@@ -859,17 +791,9 @@ function LogRow({
   const saveEdit = async () => {
     const name = draft.actorName.trim();
     const title = draft.title.trim();
-    // Durasi opsional: kosong = hapus durasi (kirim null).
-    const minutes = draft.durationHours.trim() ? hoursToMinutes(draft.durationHours) : null;
     if (!name) return setEditError("Nama tidak boleh kosong.");
-    if (!title) return setEditError("Judul tidak boleh kosong.");
+    if (!title) return setEditError("Tulis ngapain aja hari ini.");
     if (!draft.date) return setEditError("Tanggal wajib ada.");
-    if (draft.durationHours.trim() && (minutes === null || minutes < 1)) {
-      return setEditError("Durasi tidak valid — cth: 1,5");
-    }
-    if (minutes !== null && minutes > 1440) {
-      return setEditError("Durasi maksimal 24 jam.");
-    }
 
     setSaving(true);
     setEditError(null);
@@ -881,7 +805,6 @@ function LogRow({
         body: JSON.stringify({
           actorName: name,
           title,
-          durationMin: minutes,
           notes: draft.notes.trim(),
           ...(dateChanged ? { date: draft.date } : {}),
         }),
@@ -941,7 +864,7 @@ function LogRow({
         }}
       >
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div>
             <input
               value={draft.actorName}
               onChange={(e) => setDraft({ ...draft, actorName: e.target.value })}
@@ -949,20 +872,11 @@ function LogRow({
               className={underlineInput}
               autoFocus
             />
-            <input
-              value={draft.durationHours}
-              onChange={(e) => setDraft({ ...draft, durationHours: e.target.value })}
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              aria-label="Durasi (jam)"
-              className={`${underlineInput} tabular-nums`}
-            />
           </div>
           <input
             value={draft.title}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-            aria-label="Apa yang dilatih"
+            aria-label="Ngapain aja hari ini"
             className={underlineInput}
           />
           {/* re-date support — mirrors the main form's quiet date row */}
@@ -1026,7 +940,6 @@ function LogRow({
             {weekday}
           </span>
           {dayLabel}
-          {log.durationMin !== null ? ` · ${formatDuration(log.durationMin)}` : ""}
         </p>
       </div>
       <p className="mt-1 break-words text-sm">{log.title}</p>

@@ -21,19 +21,6 @@ const logSchema = z.object({
     .trim()
     .min(1, "Judul latihan wajib diisi.")
     .max(120, "Judul latihan maksimal 120 karakter."),
-  durationMin: z.preprocess(
-    (v) => {
-      if (v === undefined || v === null || v === "") return null;
-      const n = Number(v);
-      return Number.isNaN(n) ? v : n;
-    },
-    z
-      .number({ error: "Durasi harus berupa angka." })
-      .int("Durasi harus bilangan bulat menit.")
-      .min(1, "Durasi minimal 1 menit.")
-      .max(1440, "Durasi maksimal 1440 menit (24 jam).")
-      .nullable()
-  ),
   notes: z.string().max(2000, "Catatan maksimal 2000 karakter.").default(""),
   date: z
     .string()
@@ -78,7 +65,6 @@ export async function POST(req: Request) {
   const parsed = logSchema.safeParse({
     actorName: getString(form, "actorName") ?? "",
     title: getString(form, "title") ?? "",
-    durationMin: getString(form, "durationMin") ?? "",
     notes: getString(form, "notes") ?? "",
     date: getString(form, "date") ?? undefined,
   });
@@ -89,7 +75,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const { actorName, title, durationMin, notes, date: dateInput } = parsed.data;
+  const { actorName, title, notes, date: dateInput } = parsed.data;
 
   // Date defaults to "today" (local midnight); a past date may be supplied.
   const now = new Date();
@@ -157,7 +143,6 @@ export async function POST(req: Request) {
         actorName,
         title,
         date,
-        durationMin,
         notes,
         imagePath,
       },
