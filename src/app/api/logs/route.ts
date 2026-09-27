@@ -23,15 +23,16 @@ const logSchema = z.object({
     .max(120, "Judul latihan maksimal 120 karakter."),
   durationMin: z.preprocess(
     (v) => {
-      if (v === undefined || v === null || v === "") return undefined;
+      if (v === undefined || v === null || v === "") return null;
       const n = Number(v);
       return Number.isNaN(n) ? v : n;
     },
     z
-      .number({ error: "Durasi wajib diisi." })
+      .number({ error: "Durasi harus berupa angka." })
       .int("Durasi harus bilangan bulat menit.")
       .min(1, "Durasi minimal 1 menit.")
       .max(1440, "Durasi maksimal 1440 menit (24 jam).")
+      .nullable()
   ),
   notes: z.string().max(2000, "Catatan maksimal 2000 karakter.").default(""),
   date: z

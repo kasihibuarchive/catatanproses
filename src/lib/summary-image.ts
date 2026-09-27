@@ -74,9 +74,9 @@ export async function renderMonthSummaryBlob(month: MonthGroup): Promise<Blob> {
   const sessions = monthSessionCount(month);
   const people = monthActorCount(month);
   const photos = monthPhotoCount(month);
-  const statsLine = `${sessions} sesi · ${formatDuration(month.totalMin)}${
-    people > 1 ? ` · ${people} orang` : ""
-  }${photos > 0 ? ` · ${photos} foto` : ""}`;
+  const statsLine = `${sessions} sesi${
+    month.totalMin > 0 ? ` · ${formatDuration(month.totalMin)}` : ""
+  }${people > 1 ? ` · ${people} orang` : ""}${photos > 0 ? ` · ${photos} foto` : ""}`;
 
   interface Row {
     kind: "week" | "person";
@@ -88,17 +88,23 @@ export async function renderMonthSummaryBlob(month: MonthGroup): Promise<Blob> {
     rows.push({
       kind: "week",
       left: week.range,
-      right: `${week.logs.length} sesi · ${formatDuration(week.totalMin)}`,
+      right: `${week.logs.length} sesi${
+        week.totalMin > 0 ? ` · ${formatDuration(week.totalMin)}` : ""
+      }`,
     });
     const byActor = new Map<string, { name: string; min: number }>();
     for (const log of week.logs) {
       const key = log.actorName.trim().toLowerCase();
       const entry = byActor.get(key);
-      if (entry) entry.min += log.durationMin;
-      else byActor.set(key, { name: log.actorName.trim(), min: log.durationMin });
+      if (entry) entry.min += log.durationMin ?? 0;
+      else byActor.set(key, { name: log.actorName.trim(), min: log.durationMin ?? 0 });
     }
     for (const a of [...byActor.values()].sort((x, y) => y.min - x.min)) {
-      rows.push({ kind: "person", left: a.name, right: formatDuration(a.min) });
+      rows.push({
+        kind: "person",
+        left: a.name,
+        right: a.min > 0 ? formatDuration(a.min) : "",
+      });
     }
   }
 
@@ -206,9 +212,11 @@ export async function renderMonthSummaryBlob(month: MonthGroup): Promise<Blob> {
       ctx.fillText(clampText(ctx, row.left, CONTENT_W - 280), MARGIN, y);
       ctx.font = `400 24px ${gothic}`;
       ctx.fillStyle = muted;
-      ctx.textAlign = "right";
-      ctx.fillText(row.right, WIDTH - MARGIN, y);
-      ctx.textAlign = "left";
+      if (row.right) {
+        ctx.textAlign = "right";
+        ctx.fillText(row.right, WIDTH - MARGIN, y);
+        ctx.textAlign = "left";
+      }
       ctx.strokeStyle = hairline;
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -225,9 +233,11 @@ export async function renderMonthSummaryBlob(month: MonthGroup): Promise<Blob> {
       ctx.fillText(clampText(ctx, row.left, CONTENT_W - 220), MARGIN + 26, y);
       ctx.font = `400 24px ${gothic}`;
       ctx.fillStyle = muted;
-      ctx.textAlign = "right";
-      ctx.fillText(row.right, WIDTH - MARGIN, y);
-      ctx.textAlign = "left";
+      if (row.right) {
+        ctx.textAlign = "right";
+        ctx.fillText(row.right, WIDTH - MARGIN, y);
+        ctx.textAlign = "left";
+      }
     }
     y += ROW_H;
   }

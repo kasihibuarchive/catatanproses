@@ -7,7 +7,7 @@ export interface PracticeLog {
   actorName: string;
   title: string;
   date: string; // ISO
-  durationMin: number;
+  durationMin: number | null; // menit — null = tidak dicatat
   notes: string;
   imagePath: string | null;
   createdAt: string; // ISO
@@ -45,8 +45,9 @@ export function hoursToMinutes(input: string): number | null {
   return Math.round(hours * 60);
 }
 
-/** Minutes -> editable hours string with comma decimal ("90" -> "1,5"). */
-export function minutesToHoursInput(min: number): string {
+/** Minutes -> editable hours string with comma decimal ("90" -> "1,5"). Null -> "". */
+export function minutesToHoursInput(min: number | null | undefined): string {
+  if (min === null || min === undefined) return "";
   return String(parseFloat((min / 60).toFixed(2))).replace(".", ",");
 }
 
@@ -135,8 +136,8 @@ export function groupByMonthWeek(logs: PracticeLog[]): MonthGroup[] {
     }
 
     week.logs.push(log);
-    week.totalMin += log.durationMin;
-    month.totalMin += log.durationMin;
+    week.totalMin += log.durationMin ?? 0;
+    month.totalMin += log.durationMin ?? 0;
   }
 
   for (const month of months) {
@@ -156,6 +157,19 @@ function capitalize(text: string): string {
 /** Weekday kanji (Sun..Sat) for the small date accents on each entry. */
 export const WEEKDAY_KANJI = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
+/** Japanese era date (和暦) — "令和8年9月27日" — for story/poster accents. */
+export function warekiDate(isoDateKey: string): string {
+  const [y, m, d] = isoDateKey.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const era =
+    y >= 2019
+      ? { name: "令和", n: y - 2018 }
+      : y >= 1989
+        ? { name: "平成", n: y - 1988 }
+        : { name: "昭和", n: y - 1925 };
+  return `${era.name}${era.n}年${m}月${d}日`;
+}
+
 export function monthSessionCount(month: MonthGroup): number {
   return month.weeks.reduce((n, w) => n + w.logs.length, 0);
 }
@@ -174,9 +188,10 @@ export function monthPhotoCount(month: MonthGroup): number {
 export function buildMonthSummary(month: MonthGroup): string {
   const totalSessions = monthSessionCount(month);
   const actorCount = monthActorCount(month);
+  const totalPart = month.totalMin > 0 ? ` · ${formatDuration(month.totalMin)}` : "";
   const lines: string[] = [
     `Catatan Proses — ${month.label}`,
-    `Total: ${totalSessions} sesi · ${formatDuration(month.totalMin)}${
+    `Total: ${totalSessions} sesi${totalPart}${
       actorCount > 1 ? ` · ${actorCount} orang` : ""
     }`,
   ];
@@ -184,7 +199,9 @@ export function buildMonthSummary(month: MonthGroup): string {
   for (const week of month.weeks) {
     lines.push("");
     lines.push(
-      `${week.range}: ${week.logs.length} sesi · ${formatDuration(week.totalMin)}`
+      `${week.range}: ${week.logs.length} sesi${
+        week.totalMin > 0 ? ` · ${formatDuration(week.totalMin)}` : ""
+      }`
     );
 
     // Per-person totals within the week (case-insensitive name grouping).
@@ -193,13 +210,17 @@ export function buildMonthSummary(month: MonthGroup): string {
       const key = log.actorName.trim().toLowerCase();
       const entry = byActor.get(key);
       if (entry) {
-        entry.min += log.durationMin;
+        entry.min += log.durationMin ?? 0;
       } else {
-        byActor.set(key, { name: log.actorName.trim(), min: log.durationMin });
+        byActor.set(key, { name: log.actorName.trim(), min: log.durationMin ?? 0 });
       }
     }
     for (const actor of [...byActor.values()].sort((a, b) => b.min - a.min)) {
-      lines.push(`• ${actor.name} — ${formatDuration(actor.min)}`);
+      lines.push(
+        actor.min > 0
+          ? `• ${actor.name} — ${formatDuration(actor.min)}`
+          : `• ${actor.name}`
+      );
     }
   }
 
@@ -216,7 +237,9 @@ export function buildEntrySummary(log: PracticeLog): string {
   });
   const lines = [
     `${log.actorName} — ${day}`,
-    `${log.title} · ${formatDuration(log.durationMin)}`,
+    log.durationMin !== null
+      ? `${log.title} · ${formatDuration(log.durationMin)}`
+      : log.title,
   ];
   if (log.notes.trim()) lines.push(log.notes.trim());
   return lines.join("\n");
@@ -246,7 +269,7 @@ export function buildMonthCsv(month: MonthGroup): string {
         [
           dateKey(log.date),
           log.actorName.trim(),
-          String(log.durationMin),
+          log.durationMin === null ? "" : String(log.durationMin),
           minutesToHoursInput(log.durationMin),
           log.title.trim(),
           log.notes.trim(),

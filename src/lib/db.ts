@@ -73,7 +73,7 @@ const DDL_STATEMENTS = [
     "actorName" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "date" DATETIME NOT NULL,
-    "durationMin" INTEGER NOT NULL,
+    "durationMin" INTEGER,
     "notes" TEXT NOT NULL DEFAULT '',
     "imagePath" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

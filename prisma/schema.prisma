@@ -39,7 +39,7 @@ model PracticeLog {
   actorName   String
   title       String
   date        DateTime
-  durationMin Int
+  durationMin Int? // menit — opsional (boleh kosong)
   notes       String   @default("")
   imagePath   String?
   createdAt   DateTime @default(now())

@@ -6,7 +6,9 @@ Siapa pun yang membuka link bisa mencatat latihannya hari ini: apa yang dilatih,
 
 ## Fitur
 
-- **Catat hari ini** — nama/divisi, durasi dalam jam (terima `1,5`), judul, catatan, foto
+- **Catat hari ini** — nama/divisi, durasi dalam jam (terima `1,5`, boleh kosong), judul, catatan, foto
+- **Templat story ala Strava** — 4 desain 9:16 (1080×1920) per entri, ilustrasi tangan:
+  切手 perangko + cap pos, 地蔵 patung Jizō, 押入れ fusuma & noren, dan tategaki 父と暮らせば
 - **Backdate** — catat ulang untuk kemarin atau hari lain
 - **Pakai lagi** — ulang catatan terakhir sekali klik
 - **Draf otomatis** — tulisan tersimpan lokal sampai berhasil terkirim
@@ -58,6 +60,7 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma +
 src/app/page.tsx        # satu halaman: form + feed + aksi bulan
 src/app/api/logs/       # REST: GET/POST, PATCH/DELETE per entri
 src/lib/panggung.ts     # grup bulan/pekan, format durasi, CSV, teks rekap
+src/lib/story-templates.ts # templat story 9:16 (canvas, gaya cetak tangan)
 src/lib/summary-image.ts# poster PNG bulanan (canvas)
 scripts/gen-*.mjs       # generator ikon & OG image
 ```

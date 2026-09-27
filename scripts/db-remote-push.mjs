@@ -49,7 +49,11 @@ const proc = spawnSync(
   ],
   { encoding: "utf8" }
 );
-const ddl = proc.stdout ?? "";
+const ddl =
+  (proc.stdout ?? "")
+    .replace(/CREATE TABLE /g, "CREATE TABLE IF NOT EXISTS ")
+    .replace(/CREATE UNIQUE INDEX /g, "CREATE UNIQUE INDEX IF NOT EXISTS ")
+    .replace(/CREATE INDEX /g, "CREATE INDEX IF NOT EXISTS ");
 
 if (proc.status !== 0 || !ddl.trim()) {
   console.error("Gagal membuat DDL:", proc.stderr.toString());

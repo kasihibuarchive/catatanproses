@@ -29,6 +29,7 @@ import {
   type PracticeLog,
 } from "@/lib/panggung";
 import { renderMonthSummaryBlob } from "@/lib/summary-image";
+import { StoryPanel } from "@/components/story-panel";
 
 /** Quiet lowercase text-link used for all small actions. */
 const textLink =
@@ -107,7 +108,7 @@ export default function Page() {
     }, 120);
   }, []);
 
-  const totalMin = logs.reduce((sum, l) => sum + l.durationMin, 0);
+  const totalMin = logs.reduce((sum, l) => sum + (l.durationMin ?? 0), 0);
   const groups = groupByMonthWeek(logs);
 
   return (
@@ -175,7 +176,7 @@ export default function Page() {
         {/* Summary */}
         {!loading && !error && logs.length > 0 && (
           <p aria-live="polite" className="mb-6 text-sm tabular-nums text-muted-foreground">
-            {logs.length} sesi · {formatDuration(totalMin)} total
+            {logs.length} sesi{totalMin > 0 ? ` · ${formatDuration(totalMin)} total` : ""}
           </p>
         )}
 
@@ -226,7 +227,7 @@ export default function Page() {
                     </h2>
                     <div className="flex shrink-0 items-baseline gap-3">
                       <p className="text-xs tabular-nums text-muted-foreground">
-                        {formatDuration(month.totalMin)}
+                        {month.totalMin > 0 ? formatDuration(month.totalMin) : ""}
                       </p>
                       <ShareMonthLink month={month} />
                       <span aria-hidden className="text-foreground/20">·</span>
@@ -240,7 +241,8 @@ export default function Page() {
                   {month.weeks.map((week) => (
                     <div key={week.key} className="mt-5">
                       <p className="text-xs tracking-wide text-muted-foreground">
-                        {week.range} · {formatDuration(week.totalMin)}
+                        {week.range}
+                        {week.totalMin > 0 ? ` · ${formatDuration(week.totalMin)}` : ""}
                       </p>
                       <ul className="mt-2 space-y-2">
                         {week.logs.map((log) => (
@@ -498,11 +500,12 @@ function LogForm({
 
     if (!actorName.trim()) return setFieldError("Isi nama/divisi dulu ya.");
     if (!title.trim()) return setFieldError("Tulis apa yang dilatih hari ini.");
-    const minutes = hoursToMinutes(durationHours);
-    if (minutes === null || minutes < 1) {
-      return setFieldError("Isi durasi latihan (jam).");
+    // Durasi sekarang opsional — divalidasi hanya bila diisi.
+    const minutes = durationHours.trim() ? hoursToMinutes(durationHours) : null;
+    if (durationHours.trim() && (minutes === null || minutes < 1)) {
+      return setFieldError("Durasi tidak valid — cth: 1,5");
     }
-    if (minutes > 1440) {
+    if (minutes !== null && minutes > 1440) {
       return setFieldError("Durasi maksimal 24 jam.");
     }
 
@@ -511,7 +514,7 @@ function LogForm({
       const fd = new FormData();
       fd.set("actorName", actorName.trim());
       fd.set("title", title.trim());
-      fd.set("durationMin", String(minutes));
+      if (minutes !== null) fd.set("durationMin", String(minutes));
       fd.set("notes", notes.trim());
       if (!isToday && dateValue) fd.set("date", dateValue);
 
@@ -650,7 +653,10 @@ function LogForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="durationHours">Durasi (jam)</Label>
+            <Label htmlFor="durationHours">
+              Durasi (jam)
+              <span className="ml-1 font-normal text-muted-foreground">· opsional</span>
+            </Label>
             <Input
               id="durationHours"
               type="text"
@@ -658,7 +664,7 @@ function LogForm({
               autoComplete="off"
               value={durationHours}
               onChange={(e) => setDurationHours(e.target.value)}
-              placeholder="1,5"
+              placeholder="boleh kosong — 1,5"
               className={`${underlineInput} tabular-nums`}
             />
             <div className="flex items-center gap-1">
@@ -809,6 +815,7 @@ function LogRow({
 }) {
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [storyOpen, setStoryOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [focusAfterEdit, setFocusAfterEdit] = useState(false);
@@ -852,14 +859,15 @@ function LogRow({
   const saveEdit = async () => {
     const name = draft.actorName.trim();
     const title = draft.title.trim();
-    const minutes = hoursToMinutes(draft.durationHours);
+    // Durasi opsional: kosong = hapus durasi (kirim null).
+    const minutes = draft.durationHours.trim() ? hoursToMinutes(draft.durationHours) : null;
     if (!name) return setEditError("Nama tidak boleh kosong.");
     if (!title) return setEditError("Judul tidak boleh kosong.");
     if (!draft.date) return setEditError("Tanggal wajib ada.");
-    if (minutes === null || minutes < 1) {
-      return setEditError("Isi durasi (jam).");
+    if (draft.durationHours.trim() && (minutes === null || minutes < 1)) {
+      return setEditError("Durasi tidak valid — cth: 1,5");
     }
-    if (minutes > 1440) {
+    if (minutes !== null && minutes > 1440) {
       return setEditError("Durasi maksimal 24 jam.");
     }
 
@@ -1017,7 +1025,8 @@ function LogRow({
           <span aria-hidden className="font-kanji mr-1.5 text-[11px] text-seal/75">
             {weekday}
           </span>
-          {dayLabel} · {formatDuration(log.durationMin)}
+          {dayLabel}
+          {log.durationMin !== null ? ` · ${formatDuration(log.durationMin)}` : ""}
         </p>
       </div>
       <p className="mt-1 break-words text-sm">{log.title}</p>
@@ -1047,6 +1056,14 @@ function LogRow({
         <CopyEntryButton log={log} />
         <button
           type="button"
+          onClick={() => setStoryOpen((o) => !o)}
+          aria-expanded={storyOpen}
+          className={`${textLink} ${storyOpen ? "text-foreground" : ""}`}
+        >
+          story
+        </button>
+        <button
+          type="button"
           ref={editButtonRef}
           onClick={startEdit}
           className={textLink}
@@ -1062,6 +1079,7 @@ function LogRow({
           {confirming ? "yakin? klik lagi" : "hapus"}
         </button>
       </div>
+      {storyOpen && <StoryPanel log={log} />}
     </li>
   );
 }

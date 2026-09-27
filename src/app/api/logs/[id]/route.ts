@@ -16,10 +16,11 @@ const patchSchema = z
       .min(1, "Judul latihan wajib diisi.")
       .max(120, "Judul latihan maksimal 120 karakter."),
     durationMin: z
-      .number({ error: "Durasi wajib diisi." })
+      .number({ error: "Durasi harus berupa angka." })
       .int("Durasi harus bilangan bulat menit.")
       .min(1, "Durasi minimal 1 menit.")
-      .max(1440, "Durasi maksimal 1440 menit (24 jam)."),
+      .max(1440, "Durasi maksimal 1440 menit (24 jam).")
+      .nullable(),
     notes: z.string().max(2000, "Catatan maksimal 2000 karakter."),
     date: z
       .string()
@@ -59,7 +60,7 @@ export async function PATCH(
     const data: {
       actorName?: string;
       title?: string;
-      durationMin?: number;
+      durationMin?: number | null;
       notes?: string;
       date?: Date;
     } = fields;
