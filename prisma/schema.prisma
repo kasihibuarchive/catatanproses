@@ -8,6 +8,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Dialek SQLite. Lokal: file: (engine klasik, tanpa adapter). Produksi (Vercel +
+// Turso): driver adapter libSQL aktif otomatis saat DATABASE_URL = libsql://...
+// (lihat src/lib/db.ts). Kontrak query tidak berubah.
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")

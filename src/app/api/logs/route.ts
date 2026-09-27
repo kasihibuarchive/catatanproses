@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { mkdir, writeFile } from "fs/promises";
-import { randomUUID } from "crypto";
-import path from "path";
 import sharp from "sharp";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { parseLocalDate } from "@/lib/panggung";
+import { saveProcessedImage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -139,12 +137,8 @@ export async function POST(req: Request) {
         .jpeg({ quality: 80 })
         .toBuffer();
 
-      const uploadsDir = path.join(process.cwd(), "public", "uploads");
-      await mkdir(uploadsDir, { recursive: true });
-
-      const fileName = `${randomUUID()}.jpg`;
-      await writeFile(path.join(uploadsDir, fileName), processed);
-      imagePath = `/uploads/${fileName}`;
+      // Vercel Blob saat deploy (BLOB_READ_WRITE_TOKEN ada), filesystem saat lokal.
+      imagePath = await saveProcessedImage(processed);
     } catch (error) {
       console.error("Image processing failed:", error);
       return NextResponse.json(

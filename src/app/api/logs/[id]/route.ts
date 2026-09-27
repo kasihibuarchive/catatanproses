@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { unlink } from "fs/promises";
-import path from "path";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { parseLocalDate } from "@/lib/panggung";
+import { deleteImage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,18 +105,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Log tidak ditemukan." }, { status: 404 });
     }
 
-    // Best-effort cleanup of the associated image file.
-    if (log.imagePath && log.imagePath.startsWith("/uploads/")) {
-      try {
-        const uploadsRoot = path.join(process.cwd(), "public", "uploads");
-        const target = path.join(process.cwd(), "public", path.normalize(log.imagePath));
-        if (target.startsWith(uploadsRoot)) {
-          await unlink(target);
-        }
-      } catch {
-        // Ignore unlink errors (file may already be gone).
-      }
-    }
+    // Best-effort cleanup of the associated image (Blob URL atau file lokal).
+    await deleteImage(log.imagePath);
 
     await db.practiceLog.delete({ where: { id } });
     return NextResponse.json({ success: true });
