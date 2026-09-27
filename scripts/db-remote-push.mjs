@@ -6,6 +6,7 @@
 // pertama kali; untuk perubahan schema lanjutan, review dulu diff-nya.
 
 import { createClient } from "@libsql/client";
+import { spawnSync } from "node:child_process";
 
 const url = process.env.DATABASE_URL ?? "";
 const authToken = process.env.DATABASE_AUTH_TOKEN;
@@ -19,19 +20,38 @@ if (!url.startsWith("libsql://")) {
 }
 
 console.log("Menyiapkan DDL dari prisma/schema.prisma ...");
-const proc = Bun.spawnSync([
-  "bunx",
-  "prisma",
-  "migrate",
-  "diff",
-  "--from-empty",
-  "--to-schema-datamodel",
-  "prisma/schema.prisma",
-  "--script",
-]);
-const ddl = proc.stdout.toString();
 
-if (proc.exitCode !== 0 || !ddl.trim()) {
+// Node-compatible: cari runner yang tersedia (bunx dulu, lalu npx).
+function findRunner() {
+  for (const cmd of ["bunx", "npx"]) {
+    const probe = spawnSync(cmd, ["--version"], { encoding: "utf8" });
+    if (probe.status === 0) return cmd;
+  }
+  return null;
+}
+
+const runner = findRunner();
+if (!runner) {
+  console.error("Tidak menemukan bunx/npx untuk menjalankan prisma CLI.");
+  process.exit(1);
+}
+
+const proc = spawnSync(
+  runner,
+  [
+    "prisma",
+    "migrate",
+    "diff",
+    "--from-empty",
+    "--to-schema-datamodel",
+    "prisma/schema.prisma",
+    "--script",
+  ],
+  { encoding: "utf8" }
+);
+const ddl = proc.stdout ?? "";
+
+if (proc.status !== 0 || !ddl.trim()) {
   console.error("Gagal membuat DDL:", proc.stderr.toString());
   process.exit(1);
 }
