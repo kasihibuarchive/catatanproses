@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, ensureSchema } from "@/lib/db";
 import { parseLocalDate } from "@/lib/panggung";
 import { deleteImage } from "@/lib/storage";
 
@@ -49,6 +49,7 @@ export async function PATCH(
   }
 
   try {
+    await ensureSchema();
     const existing = await db.practiceLog.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: "Log tidak ditemukan." }, { status: 404 });
@@ -100,6 +101,7 @@ export async function DELETE(
   const { id } = await params;
 
   try {
+    await ensureSchema();
     const log = await db.practiceLog.findUnique({ where: { id } });
     if (!log) {
       return NextResponse.json({ error: "Log tidak ditemukan." }, { status: 404 });

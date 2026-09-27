@@ -2,7 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  /* config options here */
+  // Jangan di-bundle — pakai langsung dari node_modules (binary native/WASM;
+  // konfigurasi yang disarankan untuk Prisma + libSQL di serverless).
+  serverExternalPackages: [
+    "@prisma/client",
+    "@prisma/adapter-libsql",
+    "@libsql/client",
+    "sharp",
+  ],
   typescript: {
     ignoreBuildErrors: true,
   },

@@ -27,6 +27,27 @@ bun run dev
 
 Buka `http://localhost:3000`.
 
+## Deploy ke Vercel
+
+Next.js 16 → deploy paling mulus di Vercel (pembuat Next.js sendiri).
+
+**Cara tercepat (mode demo, tanpa setup):**
+
+1. Buka [vercel.com/new](https://vercel.com/new) → login pakai GitHub → import repo `catatanproses`.
+2. Klik **Deploy** — selesai. Tanpa env apa pun, app langsung jalan
+   (SQLite otomatis di `/tmp`, tabel dibuat otomatis).
+3. Catatan: mode demo — data & foto hilang saat server reset.
+
+**Data permanen (disarankan untuk dipakai sungguhan):**
+
+1. **Database** — buat database gratis di [app.turso.tech](https://app.turso.tech)
+   (login GitHub) → salin `DATABASE_URL` (`libsql://…`) dan buat token
+   (`DATABASE_AUTH_TOKEN`) → isi keduanya di Vercel: Project → Settings →
+   Environment Variables. Tabel dibuat otomatis saat request pertama.
+2. **Foto** — di Vercel: **Storage → Create Database → Blob** → connect ke project
+   (`BLOB_READ_WRITE_TOKEN` terisi otomatis).
+3. Push/redeploy — app jalan dengan data permanen.
+
 ## Teknologi
 
 Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma + SQLite

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, ensureSchema } from "@/lib/db";
 import { parseLocalDate } from "@/lib/panggung";
 import { saveProcessedImage } from "@/lib/storage";
 
@@ -49,6 +49,7 @@ function getString(form: FormData, key: string): string | null {
 
 export async function GET() {
   try {
+    await ensureSchema();
     const logs = await db.practiceLog.findMany({
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
@@ -149,6 +150,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    await ensureSchema();
     const log = await db.practiceLog.create({
       data: {
         actorName,
